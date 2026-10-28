@@ -2,68 +2,76 @@
 % b. (n = 2500, k = 7, p = 0.05)
 % c. (n = 2500, k = 7, p = 0.01)
 
-% Adicionar verificação de duplicata de pontos/vértices
 :- use_module(library(random)).
 :- use_module(library(lists)).
 
-% Gera N vertices com coordenadas aleatorias.
+% Gera N vértices com coordenadas aleatórias.
 gera_vertices(N, Vertices) :-
     gera_vertices2(0, N, [], Vert),
+    % precisa inverter pq os vértices foram colocados como uma pilha (maior índice está antes)
     reverse(Vert, Vertices).
 
+% Quando n vértices foram produzidos, para
 gera_vertices2(N, N, Vertices, Vertices).
 
+% enquanto está em i<n, produz novo vértice e coloca na cabeça da lista
 gera_vertices2(I, N, Vert_parcial, Vertices) :-
     repeat,
     random_between(0, N, X),
     random_between(0, N, Y),
+    % evitar que o novo vértice sobreponha um já existente
     \+ member(v(_, X, Y), Vert_parcial),
     !,
     NextI is I + 1,
     gera_vertices2(NextI, N, [v(I, X, Y) | Vert_parcial], Vertices).
 
-% Calcula a distancia euclidiana.
-distancia(v(_, X1, Y1), v(_, X2, Y2), sqrt((X1-X2)^2 + (Y1-Y2)^2)).
+% Calcula a distancia euclidiana. Operador 'is' é necessário para o prolog realizar a operação aritmética
+distancia(v(_, X1, Y1), v(_, X2, Y2), D) :- D is sqrt((X1-X2)^2 + (Y1-Y2)^2).
 
-% Padroniza a aresta para evitar duplicatas.
+% Padroniza a aresta para evitar duplicatas e colocar o vértice de menor id primeiro.
 aresta(U, V, D, e(U, V, D)) :-
     U < V, !.
 aresta(U, V, D, e(V, U, D)).
 
+% k primeiros elementos de uma lista
 pega_k(0, _, []) :- !.
 pega_k(_, [], []) :- !.
 pega_k(K, [H|T], [H|Resultado]) :-
     K1 is K - 1,
     pega_k(K1, T, Resultado).
 
+% encontra os k-mais-próximos vizinhos, conecta com V e coloca em Arestas
 vizinhos_proximos(V, Vertices, K, Arestas) :-
-    % D-Id é a distânica e o id do vértice
+    % I é o id de V
+    V = v(I, _, _),
+
+    % D-Id é a distânica e o id do vizinho
     findall(D-Id,
         ( % Para o vértice atual, percorremos todos os vértices da rede
           member(W, Vertices),
-          V = v(I, _, _),
           W = v(Id, _, _),
           I =\= Id, % ignorar próprio vértice
           distancia(V, W, D)
         ),
-        Distancias),
-    keysort(Distancias, Ordenadas),
+        Distancias_IDs),
+    keysort(Distancias_IDs, Ordenadas),
+
     % seleciona k vizinhos mais próximos
     pega_k(K, Ordenadas, MaisProximos),
-    % cria arestas
-    findall(e(U, W, D),
+
+    % cria as arestas com os mais próximos
+    findall(Aresta,
         ( member(D-Id, MaisProximos),
-          V = v(I, _, _),
-          aresta(I, Id, D, e(U, W, D))
+          aresta(I, Id, D, Aresta)
         ),
         Arestas).
 
 gera_arestas(Vertices, K, Arestas) :-
-    findall(A,
-        ( % seleciona um vértice por vez
+    findall(Aresta,
+        ( % seleciona um vértice por vez e coloca as arestas para os k-próximos em Todas
           member(V, Vertices),
-          vizinhos_proximos(V, Vertices, K, Lista),
-          member(A, Lista)
+          vizinhos_proximos(V, Vertices, K, Proximos),
+          member(Aresta, Proximos)
         ),
         Todas),
     sort(Todas, Arestas).
