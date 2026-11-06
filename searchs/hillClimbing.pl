@@ -1,38 +1,35 @@
 :- include('../graph.pl').
 
 % caso base
-dijkstra_busca(Vf, Vf, _, [(Vf, Dist)|_], Visitados, [Vf | Visitados], Dist).
+hill_climb_busca(Vf, Vf, _, Visitados, Caminho, Dist, Dist):-
+  reverse(Visitados, Caminho).
 
-dijkstra_busca(Atual, Vf, Arestas, Fila, Visitados, Caminho, Dist) :-
-
-  Fila = [(Atual, DistAtual) | _],
+hill_climb_busca(Atual, Vf, Arestas, Visitados, Caminho, DistAc, Dist) :-
 
   % encontrando todos os vizinhos no node Atual
   findall(
-    D-Id, 
+    P-Id, 
     (
-      member(arestas(Atual, Id, P, _), Arestas),
-      not(member(Id, Visitados)),
-      D is DistAtual + P
+      member(aresta(Atual, Id, P, _), Arestas),
+      not(member(Id, Visitados))
     ),
-    Novos),
+    Candidatos),
 
   % Ordenando os novos nodes de forma ascendente
-  keysort(Novos, NovosOrdenados),
+  keysort(Candidatos, CandidatosOrdenados),
+  
+  % escolhendo o menor vizinho local para seguir
+  CandidatosOrdenados = [(P-NovoNode) | _],
 
-  % colocando na Fila
-  append(NovosOrdenados, Fila, NovaFila),
+  DistNova is DistAc + P,
 
-  NovaFila = [(NovoNode, _) | _],
+  hill_climb_busca(NovoNode, Vf, Arestas, [NovoNode | Visitados], Caminho, DistNova, Dist).
 
-  dijkstra_busca(NovoNode, Vf, Arestas, NovaFila, [Atual | Visitados], Caminho, Dist).
-
-dijkstra(Vi, Vf, N, K, P, Caminho, Dist) :-
+hill_climb(Vi, Vf, N, K, P, Caminho, Dist) :-
   gera_rede_pequeno_mundo(N, K, P, Vertices, Arestas),
   member(v(Vi, _, _), Vertices),
   member(v(Vf, _, _), Vertices),
-  dijkstra_busca(Vi, Vf, Arestas, [(Vi, 0)], [Vi], Cam, Dist),
-  reverse(Cam, Caminho).
+  hill_climb_busca(Vi, Vf, Arestas, [Vi], Caminho, 0, Dist).
 
 
 
