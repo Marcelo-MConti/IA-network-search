@@ -10,7 +10,8 @@ hill_climb_busca(Atual, Vf, Arestas, Visitados, Caminho, DistAc, Dist) :-
   findall(
     P-Id, 
     (
-      member(aresta(Atual, Id, P, _), Arestas),
+      aresta(Atual, Id, P, ArestaCandidata), 
+      member(ArestaCandidata, Arestas),
       not(member(Id, Visitados))
     ),
     Candidatos),
