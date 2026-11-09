@@ -1,4 +1,4 @@
-% generate_data.pl
+% generate_monocurl_graph_data.pl
 %
 % Driver to build a small-world graph and run all six search algorithms
 % (Dijkstra, A*, Hill Climbing, Best-First, BFS, DFS) from the graph-search-network repo,
