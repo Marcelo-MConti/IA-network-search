@@ -1,7 +1,7 @@
 % generate_data.pl
 %
-% Driver to build a small-world graph and run all five search algorithms
-% (Dijkstra, A*, Hill Climbing, BFS, DFS) from the graph-search-network repo,
+% Driver to build a small-world graph and run all six search algorithms
+% (Dijkstra, A*, Hill Climbing, Best-First, BFS, DFS) from the graph-search-network repo,
 % emitting the results as Monocurl-ready data definitions plus the exploration
 % traces.
 %
@@ -66,6 +66,17 @@
 %   HILL_STATUS   : 'reach' or 'stuck' (Hill Climbing may fail on a dead end)
 %   HILL_STEPS    : per step [current, [[candidate, edge_weight], ...], chosen]
 %                   (candidates in graph-edge order; chosen = minimum weight)
+%   BEST_EXPAND   : first-visit order of nodes expanded by Best-First
+%   BEST_PATH     : node ids on the Best-First path
+%   BEST_DIST     : total distance of that path
+%   BEST_STEPS    : per step [current, [[candidate, h], ...], next] - the children
+%                   pushed by that expansion (h = straight-line distance to the
+%                   goal, which is the queue key) and the next first-visit node
+%                   (-1 on the last row)
+%   BEST_PENDING  : per step, after expanding expand[i], the open list as
+%                   [[id, h], ...] in queue order (deduped by id, nodes that were
+%                   already expanded removed)
+%   BEST_PRED     : per step, the predecessor edge [parent, child] ([] for the start)
 %   BFS_EXPAND    : first-visit order of nodes expanded by BFS
 %   BFS_PATH      : node ids on the BFS path
 %   BFS_STEPS     : per step [current, queue_after, [[parent, child], ...], depth]
@@ -276,6 +287,83 @@ hc_exp(Atual, Vf, Arestas, Visitados, ExplAcc, StepsAcc, DistAc, Dist) :-
            DistNova, Dist).
 
 % ---------------------------------------------------------------------------
+% ---------- instrumented Best-First (greedy, key = h) -----------------------
+% Mirrors searchs/bestFirst.pl: the queue holds H-(Id-Path) entries, children
+% come from filhos/4 (so only cycles WITHIN a path are avoided - there is no
+% closed set), each child is keyed by its straight-line distance to the goal,
+% new entries are appended AFTER the old ones and the queue is re-sorted with
+% keysort/2 (stable, so ties keep queue order). The search stops when the head
+% of the queue is the goal.
+%
+% Because there is no closed set, a node may be popped more than once (via
+% different paths). Like the other searches, only FIRST visits become
+% visualization steps, so BEST_EXPAND and every BEST_* row stay aligned.
+% ---------------------------------------------------------------------------
+best_exp(Vf, _, _, [_H-(Vf-CaminhoAtual) | _], ExplAcc, StepsAcc, PendAcc, PredAcc, Caminho) :-
+    reverse(CaminhoAtual, Caminho),
+    reverse([Vf | ExplAcc], Order),
+    reverse([[Vf, [], -1] | StepsAcc], Steps0),
+    reverse([[] | PendAcc], Pending),
+    pred_edge(Vf, CaminhoAtual, PredEdge),
+    reverse([PredEdge | PredAcc], Preds),
+    dedupe(Order, OrderD),
+    best_set_next(Steps0, OrderD, Steps),
+    retractall(best_steps(_)), assert(best_steps(Steps)),
+    retractall(best_pending(_)), assert(best_pending(Pending)),
+    retractall(best_pred(_)), assert(best_pred(Preds)),
+    assert_results(best, Order, Caminho, 0, reach), !.
+
+best_exp(Vf, Vertices, Arestas, [_H-(Atual-CaminhoAtual) | DemaisCaminhos],
+         ExplAcc, StepsAcc, PendAcc, PredAcc, Caminho) :-
+    filhos(Atual, Arestas, CaminhoAtual, L),
+    % same findall / append / keysort as adicionar_caminhos_best/6
+    findall(D-(X-[X | CaminhoAtual]),
+        (   member(X, L),
+            member(v(X, X1, Y1), Vertices),
+            member(v(Vf, X2, Y2), Vertices),
+            distancia(v(X, X1, Y1), v(Vf, X2, Y2), D)
+        ),
+        CaminhosNovos),
+    append(DemaisCaminhos, CaminhosNovos, S),
+    keysort(S, CaminhosAtualizados),
+    (   memberchk(Atual, ExplAcc)
+    ->  NextSteps = StepsAcc, NextPend = PendAcc, NextPred = PredAcc
+    ;   findall([Id, Dh], member(Dh-(Id-_), CaminhosNovos), CandPairs),
+        % open list after this expansion: [Id, h] pairs, deduped by id, ids
+        % already expanded removed (they would only be re-expanded duplicates)
+        exclude_open(CaminhosAtualizados, [Atual | ExplAcc], Open0),
+        dedupe_pairs(Open0, OpenPairs),
+        pred_edge(Atual, CaminhoAtual, PredEdge),
+        NextSteps = [[Atual, CandPairs, -1] | StepsAcc],
+        NextPend = [OpenPairs | PendAcc],
+        NextPred = [PredEdge | PredAcc]
+    ),
+    best_exp(Vf, Vertices, Arestas, CaminhosAtualizados,
+             [Atual | ExplAcc], NextSteps, NextPend, NextPred, Caminho).
+
+% exclude_open/3 : queue (H-(Id-_)) -> [[Id, H], ...] without ids in Closed.
+exclude_open([], _, []).
+exclude_open([H-(Id-_) | Rest], Closed, Out) :-
+    (   memberchk(Id, Closed)
+    ->  Out = OutRest
+    ;   Out = [[Id, H] | OutRest]
+    ),
+    exclude_open(Rest, Closed, OutRest).
+
+% best_set_next/3 : fill each step's `chosen` with the next first-visit node.
+best_set_next([], _, []).
+best_set_next([[Id, Cands, _] | Rows], [_ | Rest], [[Id, Cands, Next] | Out]) :-
+    (   Rest = [Next | _] -> true ; Next = -1 ),
+    best_set_next(Rows, Rest, Out).
+
+% path_dist/3 : sum of the edge weights along a path (forward order).
+path_dist([_], _, 0) :- !.
+path_dist([A, B | Rest], Arestas, D) :-
+    (   member(e(A, B, P), Arestas) ; member(e(B, A, P), Arestas) ), !,
+    path_dist([B | Rest], Arestas, D0),
+    D is D0 + P.
+
+% ---------------------------------------------------------------------------
 % ---------- instrumented BFS / DFS ------------------------------------------
 % The repo's bfs/dfs take (Vi, Vf, Vertices, Arestas) and search a fixed graph.
 % We mirror their *busca* logic (same child generation via filhos/4) while
@@ -375,7 +463,8 @@ is_prefix([X | Xs], [X | Ys]) :- is_prefix(Xs, Ys).
 % ---------------------------------------------------------------------------
 :- dynamic dij/4, astar/4, hill/4, astar_steps/1, hill_steps/1,
    astar_pending/1, dij_open/1, dij_pick/1, dij_relax/1, dij_pred/1, dij_g/1,
-   bfs/4, dfs/4, bfs_steps/1, dfs_steps/1.
+   bfs/4, dfs/4, bfs_steps/1, dfs_steps/1,
+   best/4, best_steps/1, best_pending/1, best_pred/1.
 
 assert_results(dij, Order, Path, D, Status) :-
     retractall(dij(_, _, _, _)), assert(dij(Order, Path, D, Status)).
@@ -383,6 +472,8 @@ assert_results(astar, Order, Path, D, Status) :-
     retractall(astar(_, _, _, _)), assert(astar(Order, Path, D, Status)).
 assert_results(hill, Order, Path, D, Status) :-
     retractall(hill(_, _, _, _)), assert(hill(Order, Path, D, Status)).
+assert_results(best, Order, Path, D, Status) :-
+    retractall(best(_, _, _, _)), assert(best(Order, Path, D, Status)).
 assert_results(bfs, Order, Path, D, Status) :-
     retractall(bfs(_, _, _, _)), assert(bfs(Order, Path, D, Status)).
 assert_results(dfs, Order, Path, D, Status) :-
@@ -466,11 +557,17 @@ run(N, K, P, Seed, Vi, Vf, Out) :-
     hc_exp(Vi, Vf, ArestasS, [Vi], [], [], 0, _PH),
     bfs_exp(Vf, ArestasS, [Vi-[Vi]], [], [], _PB),
     dfs_exp(Vf, ArestasS, [Vi-[Vi]], [], [], [], _Pdfs),
+    best_exp(Vf, VerticesS, ArestasS, [0-(Vi-[Vi])], [], [], [], [], _Pbest),
     dij(OrderD0, PathD, DistD, _SD),
     astar(OrderA0, PathA, DistA, _SA),
     hill(OrderH0, PathH, DistH, StatusH),
     bfs(OrderB, PathB, _, _),
     dfs(OrderDfs, PathDfs, _, _),
+    best(OrderBest0, PathBest, _, _),
+    best_steps(BestSteps),
+    best_pending(BestPending),
+    best_pred(BestPred),
+    path_dist(PathBest, ArestasS, DistBest),
     astar_steps(AstarSteps),
     astar_pending(AstarPending),
     dij_open(DijOpen),
@@ -490,6 +587,7 @@ run(N, K, P, Seed, Vi, Vf, Out) :-
     dedupe(OrderH0, OrderH),
     dedupe(OrderB, OrderBd),
     dedupe(OrderDfs, OrderDfsd),
+    dedupe(OrderBest0, OrderBest),
     % Dijkstra and A* accumulate their paths goal-first; reverse them so every
     % *_PATH is in forward order (start -> goal) for drawing. BFS/DFS already
     % reverse in their base case, and Hill Climbing records its path forward.
@@ -500,6 +598,7 @@ run(N, K, P, Seed, Vi, Vf, Out) :-
                OrderD, PathDf, DistD, DijOpen, DijPick, DijRelax, DijPred, DijG,
                OrderA, PathAf, DistA, AstarSteps, AstarPending,
                OrderH, PathH, DistH, StatusH, HillSteps,
+               OrderBest, PathBest, DistBest, BestSteps, BestPending, BestPred,
                OrderBd, PathB, BfsSteps, OrderDfsd, PathDfs, DfsSteps).
 
 run(N, K, P, Seed, Vi, Vf) :-
@@ -510,6 +609,7 @@ write_data(Out, N, K, P, Seed, Vi, Vf, Vertices, Arestas,
            OrderD, PathD, DistD, DijOpen, DijPick, DijRelax, DijPred, DijG,
            OrderA, PathA, DistA, AstarSteps, AstarPending,
            OrderH, PathH, DistH, StatusH, HillSteps,
+           OrderBest, PathBest, DistBest, BestSteps, BestPending, BestPred,
            OrderB, PathB, BfsSteps, OrderDfs, PathDfs, DfsSteps) :-
     open(Out, write, S),
     format(S, '~n# AUTO-GENERATED by visualization-support/generate_data.pl~n', []),
@@ -555,6 +655,18 @@ write_data(Out, N, K, P, Seed, Vi, Vf, Vertices, Arestas,
     format(S, '# HILL_STEPS: per step [current, [[candidate, edge_weight], ...], chosen];~n', []),
     format(S, '# candidates are in graph-edge order and chosen is the minimum-weight neighbour.~n', []),
     write_alg(S, 'HILL_STEPS', HillSteps),
+    format(S, '~n', []),
+
+    format(S, '# Best-First: greedy search on the heuristic h only (straight-line distance to the goal).~n', []),
+    write_alg(S, 'BEST_EXPAND', OrderBest),
+    write_alg(S, 'BEST_PATH', PathBest),
+    format(S, 'let BEST_DIST = ~w~n~n', [DistBest]),
+    format(S, '# BEST_STEPS: per step [current, [[candidate, h], ...], next first-visit node (-1 at the end)].~n', []),
+    write_alg(S, 'BEST_STEPS', BestSteps),
+    format(S, '# BEST_PENDING: open list after each expansion as [node_id, h] pairs in queue order.~n', []),
+    write_alg(S, 'BEST_PENDING', BestPending),
+    format(S, '# BEST_PRED: per step, the predecessor edge [parent, child] ([] for the start).~n', []),
+    write_alg(S, 'BEST_PRED', BestPred),
     format(S, '~n', []),
 
     format(S, '# BFS / DFS: unweighted traversals over the same network. *_EXPAND is the~n', []),
