@@ -149,7 +149,24 @@ reconecta(Vertices, Arestas, P, e(U, V, Peso), NovaAresta) :-
         NovaAresta = e(U, V, Peso)
     ).
 
+% ---------------------------------------------------------------------------
+% Deterministic random seeding.
+% The graph is generated from a fixed, reproducible seed so that every call to
+% gera_rede_pequeno_mundo/5 (including repeated calls from the search
+% algorithms) produces the SAME small-world network for the same N, K and P.
+% Change the seed with set_graph_seed/1 if you want a different but still
+% reproducible instance.
+% ---------------------------------------------------------------------------
+:- dynamic graph_seed/1.
+graph_seed(31).
+
+set_graph_seed(S) :-
+    retractall(graph_seed(_)),
+    assert(graph_seed(S)).
+
 gera_rede_pequeno_mundo(N, K, P, Vertices, Arestas) :-
+    graph_seed(S),
+    set_random(seed(S)),
     gera_rede_knn(N, K, Vertices, KNN),
     reconecta_arestas(KNN, Vertices, P, Arestas).
 

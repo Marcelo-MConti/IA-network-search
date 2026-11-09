@@ -1,4 +1,4 @@
-:- include('../graph.pl').
+:- ensure_loaded('../graph.pl').
 
 % caso base
 hill_climb_busca(Vf, Vf, _, Visitados, Caminho, Dist, Dist):-

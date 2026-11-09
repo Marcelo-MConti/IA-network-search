@@ -1,23 +1,26 @@
-:- include('../graph.pl').
+:- ensure_loaded('../graph.pl').
 
 % caso base
-astar_busca(Vf, _, _, [(_-Dist-(Vf-CaminhoAtual)) | _], Caminho, Dist) :-
-    reverse(CaminhoAtual, Caminho).
+astar_busca(Vf, _, _, [(_-Dist-(Vf-CaminhoAtual)) | _], Caminho, Dist, _Fechados) :-
+    reverse(CaminhoAtual, Caminho), !.
 
-astar_busca(Vf, Vertices, Arestas, Fila, Caminho, Dist) :-
-    Fila = [(F-DistAtual-(Atual-CaminhoAtual)) | Resto],
+astar_busca(Vf, Vertices, Arestas, Fila, Caminho, Dist, Fechados) :-
+    Fila = [(F_atual-DistAtual-(Atual-CaminhoAtual)) | Resto],
 
-    % encontrando todos os vizinhos do nó Atual
+    % encontrando todos os vizinhos do nó Atual (não visitados e não já
+    % expandidos - um conjunto fechado evita re-expansão infinita e, como a
+    % heurística é admissível e consistente, mantém a otimalidade)
     findall(
-        F-D-(Id-[Id | CaminhoAtual]),
+        Fn-Dn-(Id-[Id | CaminhoAtual]),
         (
             ( member(e(Atual, Id, P), Arestas) ; member(e(Id, Atual, P), Arestas) ),
             \+ member(Id, CaminhoAtual),
-            D is DistAtual + P,
+            \+ member(Id, Fechados),
+            Dn is DistAtual + P,
             member(v(Id, X1, Y1), Vertices),
             member(v(Vf, X2, Y2), Vertices),
             distancia(v(Id, X1, Y1), v(Vf, X2, Y2), H),
-            F is DistAtual + P + H
+            Fn is DistAtual + P + H
         ),
         Novos
     ),
@@ -27,13 +30,14 @@ astar_busca(Vf, Vertices, Arestas, Fila, Caminho, Dist) :-
 
     % ordenando a fila pela distância
     keysort(NovaFila, FilaOrdenada),
-    astar_busca(Vf, Vertices, Arestas, FilaOrdenada, Caminho, Dist).
+    astar_busca(Vf, Vertices, Arestas, FilaOrdenada,
+                Caminho, Dist, [Atual | Fechados]).
 
 astar(Vi, Vf, N, K, P, Caminho, Dist) :-
     gera_rede_pequeno_mundo(N, K, P, Vertices, Arestas),
     member(v(Vi, _, _), Vertices),
     member(v(Vf, _, _), Vertices),
-    astar_busca(Vf, Vertices, Arestas, [(0-0-(Vi-[Vi]))], Caminho, Dist).
+    astar_busca(Vf, Vertices, Arestas, [(0-0-(Vi-[Vi]))], Caminho, Dist, [Vi]).
 
 
 
