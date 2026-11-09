@@ -1,6 +1,4 @@
-:- include('../graph.pl').
-:- include('dfs.pl').
-
+:- ensure_loaded('dfs.pl').
 
 best_first(Vi,Vf,Vertices,Arestas,Caminho):-
     member(v(Vi,_,_),Vertices),
