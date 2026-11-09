@@ -596,7 +596,7 @@ let DijkstraOverlay = |cur, cur_g, open, relaxes, col|
         . NodeTag(cur, "g=" + num1(cur_g), darken(col), TAG_UR)
         . Rings(map(open, |e| e[0]), col)
         for ([nb, w, cand, improved] in relaxes) {
-            . DashedEdge(cur, nb, relax_color(improved), RELAX_W, [0.5, 0.35])
+            . DashedEdge(cur, nb, relax_color(improved), RELAX_W, [0.5, 0.5])
             if (improved == 1) {
                 . NodeTag(nb, "g=" + num1(cand), darken(relax_color(1)), TAG_UL)
             }
@@ -612,7 +612,7 @@ let AstarOverlay = |pending, col| {
             . CandidateRing(e[0], col)
             . NodeTag(e[0], "f=" + num1(e[1]), darken(col), TAG_UR)
             if (i == 0 and not (e[0] == GOAL_ID)) {
-                . DashedEdge(e[0], GOAL_ID, col, RELAX_W, [0.5, 0.35])
+                . DashedEdge(e[0], GOAL_ID, col, RELAX_W, [0.5, 0.5])
             }
         }
     }
@@ -628,7 +628,7 @@ let BestOverlay = |open, cands, col|
         }
         if (len(open) > 0) {
             if (not (open[0][0] == GOAL_ID)) {
-                . DashedEdge(open[0][0], GOAL_ID, col, RELAX_W, [0.5, 0.35])
+                . DashedEdge(open[0][0], GOAL_ID, col, RELAX_W, [0.5, 0.5])
             }
         }
     }
@@ -638,7 +638,7 @@ let HillOverlay = |from, cands, col|
     block {
         . Rings(map(cands, |c| c[0]), col)
         for ([id, w] in cands) {
-            . DashedEdge(from, id, col, HILL_W, [0.6, 0.4])
+            . DashedEdge(from, id, col, HILL_W, [0.5, 0.5])
         }
     }
 
@@ -1125,9 +1125,11 @@ slide "Hill Climbing"
     labels = NodeLabels([])
     play Set()
 
+
     title = Title("Hill Climbing: guloso, sem antecipação")
     subtitle = Subtitle(title, ["sempre pula para o vizinho não visitado com o menor peso de aresta"], darken(HILL_COLOR), FS_SUBTITLE)
     play Write(0.5, [&title, &subtitle])
+
 
     caption = Caption("Passo 0   •   início no nó " + to_string(START_ID))
     play Fade(0.3, [&caption])
@@ -1141,6 +1143,7 @@ slide "Hill Climbing"
     if (HILL_STATUS == "stuck") {
         hill_verdict = "preso em um máximo local"
     }
+    
     caption = Caption("Caminho: " + path_str(HILL_PATH))
     panel = SummaryPanel(HILL_EXPAND, HILL_PATH, hill_verdict, HILL_COLOR)
     play [Set([&caption]), Fade(0.5, [&panel])]
