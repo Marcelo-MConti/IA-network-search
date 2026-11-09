@@ -102,48 +102,35 @@ gera_rede_knn(N, K, Vertices, Arestas) :-
 
 reconecta_arestas(Arestas, Vertices, P, NovasArestas) :-
     % Percorre a lista de Arestas chamando reconecta para cada elemento
-    maplist(reconecta(Vertices, Arestas, P), Arestas, Resultado),
+    maplist(reconecta(Vertices, Arestas, P), Arestas, NovasArestas).
     
     % Ordena e remove duplicatas
-    sort(Resultado, NovasArestas). 
+    % sort(Resultado, NovasArestas). 
 
 reconecta(Vertices, Arestas, P, e(U, V, Peso), NovaAresta) :-
     random(R),
-
+    
     ( R < P ->
-        % Mantem U e sorteia outro vertice para substituir V
-        findall(Id,
-            ( member(v(Id, _, _), Vertices),
+        W = 30,
+        member(v(W, X2, Y2), Vertices),
 
-              % Não permite conectar U com ele mesmo
-              Id =\= U,
+        % Não permite conectar U com ele mesmo
+        % W =\= U,
+        % W =\= V,
 
-              % Padroniza a aresta para verificar se já existe
-              aresta(U, Id, _, Candidata),
+        % Recupera as coordenadas dos vértices
+        member(v(U, X1, Y1), Vertices),
 
-              % Não permite criar uma aresta já existente
-              \+ member(Candidata, Arestas)
-            ),
-            Candidatos),
-
-        % Se não houver candidatos, mantém a aresta original
-        (
-            Candidatos = [] ->
-                NovaAresta = e(U, V, Peso)
-        ;
-            % Sorteia um novo vértice
-            random_member(W, Candidatos),
-
-            % Recupera as coordenadas dos vértices
-            member(v(U, X1, Y1), Vertices),
-            member(v(W, X2, Y2), Vertices),
-
-            % Calcula a nova distância
-            D is sqrt((X1-X2)^2 + (Y1-Y2)^2),
+        % Calcula a nova distância
+        D is sqrt((X1-X2)^2 + (Y1-Y2)^2),
             
-            % Cria a nova aresta
-            aresta(U, W, D, NovaAresta)
-        )
+        % Cria a nova aresta
+        aresta(U, W, D, NovaAresta),
+
+        % Não permite criar uma aresta já existente
+        \+ member(NovaAresta, Arestas)
+
+
     ;
         % Caso contrário, mantém a aresta original
         NovaAresta = e(U, V, Peso)
