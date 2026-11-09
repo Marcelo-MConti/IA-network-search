@@ -5,25 +5,31 @@
 :- use_module(library(random)).
 :- use_module(library(lists)).
 
-% Gera N vértices com coordenadas aleatórias
+% Gera N vértices com coordenadas aleatórias em espaço 0..50
 gera_vertices(N, Vertices) :-
-    gera_vertices2(0, N, [], Vert),
+    % Use fixed 0..50 range regardless of N for better spreading (moderate scale)
+    CoordMax = 50,
+    MinDist = 3.0,  % Minimum initial distance between nodes
+    gera_vertices2(0, N, CoordMax, MinDist, [], Vert),
     % É necessário inverter porque os vértices foram inseridos no início da lista
     reverse(Vert, Vertices).
 
 % Para quando n vértices forem produzidos
-gera_vertices2(N, N, Vertices, Vertices).
+gera_vertices2(N, N, _CoordMax, _MinDist, Vertices, Vertices).
 
 % Enquanto I < N, produz novo vértice e coloca na cabeça da lista
-gera_vertices2(I, N, Vert_parcial, Vertices) :-
+gera_vertices2(I, N, CoordMax, MinDist, Vert_parcial, Vertices) :-
     repeat,
 
-    % Sorteia coordenadas entre 0 e N
-    random_between(0, N, X),
-    random_between(0, N, Y),
+    % Sorteia coordenadas entre 0 e CoordMax (fixed 50)
+    random_between(0, CoordMax, X),
+    random_between(0, CoordMax, Y),
 
     % Evita que o novo vértice sobreponha um já existente
     \+ member(v(_, X, Y), Vert_parcial),
+    
+    % Evita que o novo vértice fique muito próximo de um já existente
+    \+ too_close(v(I, X, Y), Vert_parcial, MinDist),
 
     % Interrompe o repeat quando encontra coordenadas válidas
     !,
@@ -31,7 +37,16 @@ gera_vertices2(I, N, Vert_parcial, Vertices) :-
     NextI is I + 1,
 
     % Insere o novo vértice no início da lista
-    gera_vertices2(NextI, N, [v(I, X, Y) | Vert_parcial], Vertices).
+    gera_vertices2(NextI, N, CoordMax, MinDist, [v(I, X, Y) | Vert_parcial], Vertices).
+
+% Verifica se um vértice está muito próximo de qualquer vértice na lista
+too_close(_, [], _MinDist) :- !, fail.  % Not too close if list empty
+too_close(v(_, X1, Y1), [v(_, X2, Y2) | Rest], MinDist) :-
+    Dist is sqrt((X1 - X2)*(X1 - X2) + (Y1 - Y2)*(Y1 - Y2)),
+    (   Dist < MinDist
+    ->  true    % Too close
+    ;   too_close(v(_, X1, Y1), Rest, MinDist)
+    ).
 
 % Calcula a distância euclidiana
 distancia(v(_, X1, Y1), v(_, X2, Y2), D) :- 
@@ -150,7 +165,8 @@ graph_seed(31).
 
 set_graph_seed(S) :-
     retractall(graph_seed(_)),
-    assert(graph_seed(S)).
+    assert(graph_seed(S)),
+    set_random(seed(S)).
 
 gera_rede_pequeno_mundo(N, K, P, Vertices, Arestas) :-
     graph_seed(S),

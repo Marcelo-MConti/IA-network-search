@@ -18,7 +18,12 @@ import std.mesh
 import std.anim
 import std.scene
 
-import gen.graph
+# gen.graph15: Hill Climbing fica preso
+# START -> 2, GOAL -> 7
+#
+# gen.graph20: Hill Climbing chega no destino
+# START -> 11, GOAL -> 6
+import gen.graph20 
 
 
 background = WHITE
@@ -31,8 +36,8 @@ background = WHITE
 # Parâmetros usados no gerador (apenas para exibição nos painéis).
 let SW_K = 5
 let SW_P = 0.15
-let START_ID = 0
-let GOAL_ID = 29
+let START_ID = 11
+let GOAL_ID = 6
 
 # --- Quadro -----------------------------------------------------------------
 # A altura do quadro é fixa (4 unidades); a largura depende da proporção.
@@ -80,7 +85,7 @@ let GRAPH_UNIT = min((AREA_RIGHT - AREA_LEFT) / GRAPH_SPAN_X, AREA_H / GRAPH_SPA
 let GRAPH_SCREEN_CENTER = [(AREA_LEFT + AREA_RIGHT) / 2, AREA_MID_Y, 0]
 
 # Raio do nó em coordenadas locais.
-let NODE_R_LOCAL = 1
+let NODE_R_LOCAL = 1.5
 
 # --- Cores ------------------------------------------------------------------
 let DIJK_COLOR = CYAN
@@ -135,14 +140,14 @@ let FS_AUTHOR_ID = 0.5
 let FS_TITLE = 0.92
 let FS_SUBTITLE = 0.56
 let FS_CAPTION = 0.56
-let FS_NODE_ID = 5       # em coordenadas locais do grafo (efetivo = FS_NODE_ID * GRAPH_UNIT)
+let FS_NODE_ID = 8       # em coordenadas locais do grafo (efetivo = FS_NODE_ID * GRAPH_UNIT)
 let FS_TAG = 0.36        # rótulos g= / f= ao lado dos nós
 let FS_PANEL_HEAD = 0.76
 let FS_PANEL_SUB = 0.48
 let FS_ROW = 0.6
 let FS_MARK = 0.48
 let FS_TABLE = 0.7
-let FS_TABLE_HEAD = 0.46
+let FS_TABLE_HEAD = 0.64
 
 # Ajuste esse valor para alinhas o texto matemático com o texto usual, se necessário.
 let MATH_DROP = 0.11
@@ -381,6 +386,7 @@ let DashedEdge = |a, b, c, w, dash|
 # Círculo (sólido) centrado em um nó.
 let NodeCircle = |id, r|
     embed_graph{}
+    fill{WHITE}
     center{local(id)}
     Circle(r)
 
@@ -390,7 +396,7 @@ let GraphEdges = || stroke{EDGE_COLOR, EDGE_W} z_index{Z_EDGE} EdgeSet(GRAPH_EDG
 # Todos os nós do grafo (apenas círculos).
 let AllNodes = ||
     z_index{Z_NODE}
-    fill{WHITE}
+    #fill{WHITE}
     stroke{EDGE_COLOR, NODE_STROKE}
     block {
         for (pt in GRAPH_POINTS) {
@@ -1126,7 +1132,7 @@ slide "Hill Climbing"
     play Set()
 
 
-    title = Title("Hill Climbing: guloso, sem antecipação")
+    title = Title("Hill Climbing: guloso, sem backtracking")
     subtitle = Subtitle(title, ["sempre pula para o vizinho não visitado com o menor peso de aresta"], darken(HILL_COLOR), FS_SUBTITLE)
     play Write(0.5, [&title, &subtitle])
 

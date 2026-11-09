@@ -146,6 +146,7 @@ dij_exp(Vf, Arestas, [(Cur-(Atual-Path)) | Resto], Fechados,
             )
         ),
         RelaxRow),
+    !,
     findall(Dn-(Id-[Id | Path]),
         (   ( member(e(Atual, Id, P), Arestas) ; member(e(Id, Atual, P), Arestas) ),
             \+ member(Id, Path),
@@ -153,6 +154,7 @@ dij_exp(Vf, Arestas, [(Cur-(Atual-Path)) | Resto], Fechados,
             Dn is Cur + P
         ),
         Novos),
+    !,
     append(Novos, Resto, NovaFila),
     keysort(NovaFila, FilaOrdenada),
     % Drop stale queue entries for nodes that are already closed, so the
@@ -162,6 +164,7 @@ dij_exp(Vf, Arestas, [(Cur-(Atual-Path)) | Resto], Fechados,
     % the head id (the minimum-g node Dijkstra pops next).
     pack_open_dij(FilaAberta, OpenPairs, Head),
     pred_edge(Atual, Path, PredEdge),
+    !,
     dij_exp(Vf, Arestas, FilaAberta, [Atual | Fechados], [Atual | ExplAcc],
             [OpenPairs | OpenAcc], [Head | PickAcc], [RelaxRow | RelaxAcc],
             [PredEdge | PredAcc], [Cur | GAcc], PathFinal, DistOut).
