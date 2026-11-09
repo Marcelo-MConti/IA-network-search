@@ -9,7 +9,7 @@ dfs_busca(Vf,_,[Vf-CaminhoAtual|_],Caminho,_) :-
     reverse(CaminhoAtual,Caminho), !.
 
 % Caso em que não encontramos nenhum caminho possivel
-dfs_busca(Vf,_,[],_Caminho,_):-
+dfs_busca(_,_,[],_Caminho,_):-
     fail.
 
 dfs_busca(Vf,Arestas,[Atual-CaminhoAtual | DemaisCaminhos],Caminho,Fechados):-
