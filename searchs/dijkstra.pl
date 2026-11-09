@@ -27,8 +27,7 @@ dijkstra_busca(Vf, Arestas, Fila, Caminho, Dist, Fechados) :-
     keysort(NovaFila, FilaOrdenada),
     dijkstra_busca(Vf, Arestas, FilaOrdenada, Caminho, Dist, [Atual | Fechados]).
 
-dijkstra(Vi, Vf, N, K, P, Caminho, Dist) :-
-    gera_rede_pequeno_mundo(N, K, P, Vertices, Arestas),
+dijkstra(Vi, Vf, Vertices, Arestas, Caminho, Dist) :-
     member(v(Vi, _, _), Vertices),
     member(v(Vf, _, _), Vertices),
     dijkstra_busca(Vf, Arestas, [(0-(Vi-[Vi]))], Caminho, Dist, [Vi]).

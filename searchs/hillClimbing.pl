@@ -25,8 +25,7 @@ hill_climb_busca(Atual, Vf, Arestas, Visitados, Caminho, DistAc, Dist) :-
 
   hill_climb_busca(NovoNode, Vf, Arestas, [NovoNode | Visitados], Caminho, DistNova, Dist).
 
-hill_climb(Vi, Vf, N, K, P, Caminho, Dist) :-
-  gera_rede_pequeno_mundo(N, K, P, Vertices, Arestas),
+hill_climb(Vi, Vf, Vertices, Arestas, Caminho, Dist) :-
   member(v(Vi, _, _), Vertices),
   member(v(Vf, _, _), Vertices),
   hill_climb_busca(Vi, Vf, Arestas, [Vi], Caminho, 0, Dist).
