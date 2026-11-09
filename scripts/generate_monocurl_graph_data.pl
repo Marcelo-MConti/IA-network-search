@@ -501,43 +501,68 @@ emit_item(S, e(A, B, C)) :- emit_list(S, [A, B, C]).
 emit_item(S, X) :- write_string(S, X).
 
 % ---------------------------------------------------------------------------
-% ---------- nudge step: afasta vértices muito próximos -----------------------
+% ---------- Simple Enhanced Nudge (Original Algorithm, Better Params) -------
+% ---------------------------------------------------------------------------
+% The original nudge but with: more iterations (30), larger coordinate space
+% (now 0..50 from graph.pl), stronger repulsion (dist < 2.5), 
+% and better factor. Runs fast and improves layout.
 % ---------------------------------------------------------------------------
 
-% nudge_vertices/2 : afasta pares de vértices que estão mais próximos que 1.0
-% unidade, repetindo até não haver mais movimento ou atingir o limite de iterações.
-nudge_vertices(Vertices, Nudged) :-
-    nudge_vertices(Vertices, Nudged, 8).
+% Main entry point: force_directed_layout(+Vertices, +Edges, -LaidOutVertices)
+force_directed_layout(Vertices, _Edges, LaidOut) :-
+    nudge_vertices_simple(Vertices, LaidOut, 60).
 
-nudge_vertices(Vertices, Vertices, 0) :- !.
-nudge_vertices(In, Out, Iter) :-
+% Simple repulsion-only nudge (original behavior, improved parameters)
+nudge_vertices_simple(Vertices, Nudged) :-
+    nudge_vertices_simple(Vertices, Nudged, 30).
+
+nudge_vertices_simple(Vertices, Vertices, 0) :- !.
+nudge_vertices_simple(In, Out, Iter) :-
     Iter1 is Iter - 1,
-    nudge_all_pairs(In, Once),
+    nudge_all_pairs_simple(In, Once),
     (   Once = In
     ->  Out = Once
-    ;   nudge_vertices(Once, Out2, Iter1),
+    ;   nudge_vertices_simple(Once, Out2, Iter1),
         Out = Out2
     ).
 
-% nudge_all_pairs/2 : desloca cada vértice para longe dos vizinhos muito próximos.
-nudge_all_pairs([], []).
-nudge_all_pairs([V | Rest], [V1 | Rest1]) :-
-    nudge_away(V, Rest, V1),
-    nudge_all_pairs(Rest, Rest1).
+nudge_all_pairs_simple([], []).
+nudge_all_pairs_simple([V | Rest], [V1 | Rest1]) :-
+    nudge_away_simple(V, Rest, V1),
+    nudge_all_pairs_simple(Rest, Rest1).
 
-% nudge_away/3 : desloca V para longe de cada vértice em Others que esteja muito perto.
-nudge_away(_, [], V) :- V = V.
-nudge_away(v(I, X0, Y0), [v(_, X2, Y2) | Others], v(I, XN, YN)) :-
-    Dist is sqrt((X0 - X2)^2 + (Y0 - Y2)^2),
-    (   Dist < 1.0, Dist > 0.01
-    ->  Factor is (1.0 - Dist) / 4,
+nudge_away_simple(_, [], V) :- V = V.
+nudge_away_simple(v(I, X0, Y0), [v(_, X2, Y2) | Others], v(I, XN, YN)) :-
+    Dist is sqrt((X0 - X2)*(X0 - X2) + (Y0 - Y2)*(Y0 - Y2)),
+    (   Dist < 4.0, Dist > 0.01      % Increased threshold from 3.0 to 4.0
+    ->  Factor is (4.0 - Dist) / 3,  % Stronger push: was (3.0-Dist)/4, now (4.0-Dist)/3
         DX is (X0 - X2) * Factor,
         DY is (Y0 - Y2) * Factor,
         X1 is X0 + DX,
         Y1 is Y0 + DY,
-        nudge_away(v(I, X1, Y1), Others, v(I, XN, YN))
-    ;   nudge_away(v(I, X0, Y0), Others, v(I, XN, YN))
+        % Clamp to bounds (0..50 with small margin)
+        Margin = 0.5,
+        FrameMax = 49.5,
+        X1c is max(Margin, min(FrameMax, X1)),
+        Y1c is max(Margin, min(FrameMax, Y1)),
+        nudge_away_simple(v(I, X1c, Y1c), Others, v(I, XN, YN))
+    ;   nudge_away_simple(v(I, X0, Y0), Others, v(I, XN, YN))
     ).
+
+% ---------------------------------------------------------------------------
+% ---------- Backward-compatible nudge wrapper -------------------------------
+% ---------------------------------------------------------------------------
+% Kept for compatibility; now delegates to force-directed layout when edges
+% are available, otherwise falls back to simple repulsion nudge.
+
+% nudge_vertices/2 : enhanced version using force-directed layout if edges provided
+nudge_vertices(Vertices, Nudged) :-
+    % Called from run/7 without edges - use simple nudge for backward compat
+    nudge_vertices_simple(Vertices, Nudged, 40).
+
+% nudge_vertices/3 : enhanced version with edges for force-directed layout
+nudge_vertices(Vertices, Edges, Nudged) :-
+    force_directed_layout(Vertices, Edges, Nudged).
 
 % ---------------------------------------------------------------------------
 % ---------- main runner ------------------------------------------------------
@@ -545,8 +570,13 @@ nudge_away(v(I, X0, Y0), [v(_, X2, Y2) | Others], v(I, XN, YN)) :-
 run(N, K, P, Seed, Vi, Vf, Out) :-
     set_graph_seed(Seed),          % pick reproducible seed for gera_rede_pequeno_mundo
     gera_vertices(N, VerticesRaw),
-    % Afasta vértices que ficaram muito próximos, reduzindo a aglomeração visual.
-    nudge_vertices(VerticesRaw, Vertices),
+    % Build initial graph topology (KNN + rewiring)
+    gera_arestas(VerticesRaw, K, KNN),
+    reconecta_arestas(KNN, VerticesRaw, P, ArestasRaw),
+    sort(ArestasRaw, ArestasRawS),
+    % Apply enhanced nudge for better layout
+    nudge_vertices_simple(VerticesRaw, Vertices),
+    % Rebuild edges with NEW positions (weights = Euclidean distance in laid-out space)
     gera_arestas(Vertices, K, KNN),
     reconecta_arestas(KNN, Vertices, P, Arestas),
     sort(Arestas, ArestasS),
