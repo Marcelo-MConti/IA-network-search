@@ -145,7 +145,7 @@ let FS_TABLE = 0.7
 let FS_TABLE_HEAD = 0.46
 
 # Ajuste esse valor para alinhas o texto matemático com o texto usual, se necessário.
-let MATH_DROP = 0.09
+let MATH_DROP = 0.11
 
 # Deslocamentos dos rótulos em relação ao centro do nó (coordenadas do cenário).
 let TAG_UR = [0.3, 0.12, 0]
@@ -560,7 +560,7 @@ let ScoredPanel = |entries, tag, head, sub, mark, col|
 
 # Lista aberta de A*: mostra f e sua decomposição g + h.
 let AstarPanel = |pending, col|
-    Panel("Lista aberta", "menor f primeiro  •  f = g + h", [],
+    Panel("Nós a serem visitados", "menor f primeiro  •  f = g + h", [],
           map(unique_pending(pending),
               |e| [to_string(e[0]), "f=" + num1(e[1]), num1(e[1] - h(e[0])) + " + " + num1(h(e[0]))]),
           COLS_ASTAR, col, "", 1)
@@ -682,7 +682,7 @@ let DIJK_SPEC = [
     |i| [],
     |i| "expandir " + to_string(DIJK_EXPAND[i]) + " (g=" + num1(DIJK_G[i]) + ")   •   relaxar " + to_string(len(DIJK_RELAX[i])),
     |i| DijkstraOverlay(DIJK_EXPAND[i], DIJK_G[i], DIJK_OPEN[i], DIJK_RELAX[i], DIJK_COLOR),
-    |i| ScoredPanel(DIJK_OPEN[i], "g", "Lista aberta", "menor g primeiro", "próximo", DIJK_COLOR),
+    |i| ScoredPanel(DIJK_OPEN[i], "g", "Nós a serem visitados", "menor g primeiro", "próximo", DIJK_COLOR),
     |i| DIJK_PICK[i]
 ]
 
@@ -706,7 +706,7 @@ let BEST_SPEC = [
     |i| [],
     |i| "expandir " + to_string(BEST_STEPS[i][0]) + "   •   novos: " + to_string(len(BEST_STEPS[i][1])) + "   •   lista aberta: " + to_string(len(BEST_PENDING[i])),
     |i| BestOverlay(BEST_PENDING[i], BEST_STEPS[i][1], BEST_COLOR),
-    |i| ScoredPanel(BEST_PENDING[i], "h", "Lista aberta", "menor h primeiro", "próximo", BEST_COLOR),
+    |i| ScoredPanel(BEST_PENDING[i], "h", "Nós a serem visitados", "menor h primeiro", "próximo", BEST_COLOR),
     |i| BEST_STEPS[i][2]
 ]
 
@@ -867,20 +867,6 @@ let AuthorRows = |authors, per_row| {
     return VStack(spaced(rows, Gap([0.01, 0.15])))
 }
 
-let CoverBody = ||
-    [
-        center{[0, 0.65, 0]}
-        color{BLACK} 
-        Sans("em uma rede Pequeno Mundo", FS_COVER_BODY),
-        
-        center{[0, 0.3, 0]}
-        color{BLACK}
-        Typst("$(n=" + to_string(len(GRAPH_POINTS)) + ", thick K=" + to_string(SW_K) + ", thick p=" + to_string(SW_P) + ")$", FS_COVER_BODY - 0.05),
-        
-        center{[0, -1, 0]}
-        AuthorRows(AUTHORS, 2)
-    ]
-
 # Colunas da tabela comparativa (posições relativas à largura do quadro).
 let TABLE_LEFT = 0.7 - FRAME_W / 2
 let TABLE_RIGHT = FRAME_W / 2 - 0.7
@@ -952,11 +938,33 @@ slide "Introdução"
             color{BLACK}
             stroke{BLACK, 0.75}
             Sans("Comparação de algoritmos de busca", FS_COVER_TITLE)
+
     subtitle = Subtitle(title, ["Dijkstra, A*, Hill Climbing, BFS, DFS"], BLACK, FS_COVER_SUB)
     play Write(1.2, [&title, &subtitle])
 
+    let CoverBody = ||
+        [
+            center{[0, 0.65, 0]}
+            color{BLACK} 
+            Sans("em uma rede Pequeno Mundo", FS_COVER_BODY),
+            
+            center{[0, 0.3, 0]}
+            color{BLACK}
+            Typst("$(n=" + to_string(len(GRAPH_POINTS)) + ", thick K=" + to_string(SW_K) + ", thick p=" + to_string(SW_P) + ")$", FS_COVER_BODY - 0.05)
+        ]
+
     intro = CoverBody()
     play Fade(0.8, [&intro])
+        
+    mesh authors = [    
+        center{[0, -1, 0]}
+        AuthorRows(AUTHORS, 2)
+    ]
+    
+    play Fade(0.6, [&authors])
+    play Wait(0.4)
+    
+    authors = []
 
 slide "O grafo"
     title = []
@@ -979,9 +987,33 @@ slide "O grafo"
     labels = NodeLabels([])
     panel = GraphInfoPanel()
     play Fade(0.5, [&labels, &panel])
+    
+    mesh start_node_caption_key =
+        to_corner{DOWN + LEFT, 0.2}
+        fill{START_COLOR} stroke{darken(START_COLOR), NODE_STROKE} Circle(0.04)
+    
+    mesh start_node_caption_label =
+        next_to{start_node_caption_key} Sans("origem: nó " + to_string(START_ID), FS_CAPTION)
+    
+    mesh goal_node_caption_key =
+        next_to{start_node_caption_label, 1r, 1}
+        fill{GOAL_COLOR} stroke{darken(GOAL_COLOR), NODE_STROKE} Circle(0.04)
+    
+    mesh goal_node_caption_label = 
+        next_to{goal_node_caption_key} Sans("destino: nó " + to_string(GOAL_ID), FS_CAPTION)
+    
+    caption = 
+        [&start_node_caption_key, &start_node_caption_label, &goal_node_caption_key, &goal_node_caption_label]
+    
+    play [
+        Write(0.6, [&caption])
+    ]
+    
+    start_node_caption_key = []
+    start_node_caption_label = []
+    goal_node_caption_key = []
+    goal_node_caption_label = []
 
-    caption = Caption("início (verde): nó " + to_string(START_ID) + "   •   objetivo (vermelho): nó " + to_string(GOAL_ID))
-    play Write(0.6, [&caption])
 
 # -----------------------------------------------------------------------------
 # Slides dos algoritmos: mesmo esqueleto (limpa camadas -> título -> RunSearch ->
@@ -1000,7 +1032,7 @@ slide "Dijkstra"
     labels = NodeLabels([])
     play Set()
 
-    title = Title("Dijkstra  —  custo uniforme, expande por distância")
+    title = Title("Dijkstra:  custo uniforme, expande por distância")
     subtitle = Subtitle(title, ["lista aberta = nós da fronteira; expande o menor g"], darken(DIJK_COLOR), FS_SUBTITLE)
     play Write(0.5, [&title, &subtitle])
 
@@ -1029,7 +1061,7 @@ slide "A*"
     labels = NodeLabels([])
     play Set()
 
-    title = Title("A*  —  guiado por heurística")
+    title = Title("A*:  guiado por heurística")
     subtitle = Subtitle(title,
                         ["pontua a lista aberta por", MathText("f = g + h", FS_SUBTITLE),
                          "com", MathText("h", FS_SUBTITLE), "= distância em linha reta até o objetivo"],
@@ -1061,7 +1093,7 @@ slide "Best-First"
     labels = NodeLabels([])
     play Set()
 
-    title = Title("Best-First  —  guloso pela heurística")
+    title = Title("Best-First: escolhe o nó com melhor valor de heurística, de forma gulosa")
     subtitle = Subtitle(title,
                         ["ordena a lista aberta só por", MathText("h", FS_SUBTITLE),
                          "= distância em linha reta até o objetivo, ignorando o custo percorrido"],
@@ -1093,7 +1125,7 @@ slide "Hill Climbing"
     labels = NodeLabels([])
     play Set()
 
-    title = Title("Hill Climbing Guloso  —  sem antecipação")
+    title = Title("Hill Climbing: guloso, sem antecipação")
     subtitle = Subtitle(title, ["sempre pula para o vizinho não visitado com o menor peso de aresta"], darken(HILL_COLOR), FS_SUBTITLE)
     play Write(0.5, [&title, &subtitle])
 
@@ -1126,7 +1158,7 @@ slide "BFS"
     labels = NodeLabels([])
     play Set()
 
-    title = Title("Busca em Largura  —  explora camada por camada")
+    title = Title("Busca em Largura:  explora camada por camada")
     subtitle = Subtitle(title, ["fila FIFO expande todos os nós na distância d antes de d+1; cor mais clara = camada mais profunda"], darken(BFS_COLOR), FS_SUBTITLE)
     play Write(0.5, [&title, &subtitle])
 
@@ -1155,7 +1187,7 @@ slide "DFS"
     labels = NodeLabels([])
     play Set()
 
-    title = Title("Busca em Profundidade  —  mergulha o mais fundo possível")
+    title = Title("Busca em Profundidade:  explora cada caminho até o fim")
     subtitle = Subtitle(title, ["pilha LIFO: escolhe o vizinho mais profundo não visitado (critério: profundidade máxima)"], darken(DFS_COLOR), FS_SUBTITLE)
     play Write(0.5, [&title, &subtitle])
 
@@ -1195,6 +1227,7 @@ slide "Comparação"
     table = ComparisonTable()
     play Fade(0.5, [&table])
 
-    caption = Footer("O BFS atinge o objetivo com o menor número de saltos; o A* explora muito menos nós que o Dijkstra.")
+    caption = Footer("O BFS chega no destino com o menor número de passos, enquanto o A* explora muito menos nós que o Dijkstra.")
     play Write(0.6, [&caption])
+    
     print ["dijkstra" -> len(DIJK_EXPAND), "astar" -> len(ASTAR_EXPAND), "bfs" -> len(BFS_EXPAND), "dfs" -> len(DFS_EXPAND), "hill" -> len(HILL_EXPAND)]
