@@ -21,7 +21,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-BASE = Path(__file__).resolve().parent
+BASE = Path(__file__).resolve().parent.parent
 SEARCHS = BASE / "searchs"
 HELPER = BASE / "scripts" / "benchmark.pl"
 RESULTS = BASE / "gen"
@@ -33,8 +33,31 @@ PARAMS = [
 ]
 
 ALGOS = ["bfs", "dfs", "dijkstra", "astar", "best_first", "hill_climb"]
+# ALGOS = ["hill_climb"]
 N_PAIRS = 10
-PAIR_SEED = 20261109  # deterministic start/goal pair selection
+
+## Seeds tested, in (pair, graph) format:
+##
+##  (334871, 31)
+##  (334872, 31)
+##  (334873, 31)
+##  (937325428328, 31)
+##  (284529364, 31)
+##  (7, 31)
+##  (131071, 2147483647)
+##  (437436970, 2147483647)
+##  (12974362111, 2147483647)
+##  (89162, 111)
+##  (936381, 111)
+##  
+##
+## Best seeds seen so far for Hill Climbing:
+##
+##  (7, 31)             found:  1/10,  1/10,  1/10
+##  (89162, 111)        found:  0/10,  0/10,  1/10
+##  (936381, 111)       found:  1/10,  0/10,  0/10
+##  (334871, 31)        found:  1/10,  0/10,  0/10
+##  (937325428328, 31)  found:  1/10,  0/10,  0/10
 
 
 def gen_pairs(n: int, rng: random.Random):
@@ -53,14 +76,14 @@ def pct(p: float) -> int:
     return int(round(p * 100))
 
 
-def run_job(n, k, p, algo, pairs):
+def run_job(n, k, p, algo, pairs, graph_seed):
     """
     Run one algorithm across all pairs for one parameter set.
     Returns the parsed JSON object from the Prolog helper.
     """
     pairs_text = json.dumps(pairs)  # valid Prolog term: list of [int, int]
     cmd = ["swipl", "-q", "-f", str(HELPER), "--",
-           str(n), str(k), repr(p), pairs_text, algo]
+           str(graph_seed), str(n), str(k), repr(p), pairs_text, algo]
     proc = subprocess.run(cmd, cwd=str(SEARCHS), capture_output=True,
                           text=True, timeout=1800)
     if proc.returncode != 0:
@@ -92,6 +115,10 @@ def main():
         description="Benchmark graph search algorithms on small-world networks.")
     ap.add_argument("-j", "--jobs", type=int, required=True,
                     help="number of parallel swipl jobs (work queue size; no default)")
+    ap.add_argument("-p", "--pair-seed", type=int, default=31,
+                    help="seed used to generate start/goal node pairs")
+    ap.add_argument("-s", "--graph-seed", type=int, default=31,
+                    help="seed used to generate the graph")
     args = ap.parse_args()
 
     RESULTS.mkdir(parents=True, exist_ok=True)
@@ -99,14 +126,14 @@ def main():
     # Deterministic start/goal pairs per parameter set.
     param_pairs = {}
     for n, k, p in PARAMS:
-        param_pairs[(n, k, p)] = gen_pairs(n, random.Random(PAIR_SEED))
+        param_pairs[(n, k, p)] = gen_pairs(n, random.Random(args.pair_seed))
 
     # Build one job per (parameter set, algorithm): 3 * 6 = 18 jobs.
     jobs = []
     for n, k, p in PARAMS:
         pairs = param_pairs[(n, k, p)]
         for algo in ALGOS:
-            jobs.append((n, k, p, algo, pairs))
+            jobs.append((n, k, p, algo, pairs, args.graph_seed))
 
     # Collect per-parameter-set results: {(n,k,p): {algo: data}}
     per_param = {(n, k, p): {"pairs": param_pairs[(n, k, p)],
@@ -116,8 +143,8 @@ def main():
                  for (n, k, p) in PARAMS}
 
     def do_job(job):
-        n, k, p, algo, pairs = job
-        data = run_job(n, k, p, algo, pairs)
+        n, k, p, algo, pairs, graph_seed = job
+        data = run_job(n, k, p, algo, pairs, graph_seed)
         return (n, k, p, algo, data)
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=args.jobs) as ex:

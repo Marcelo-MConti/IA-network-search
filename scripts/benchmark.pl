@@ -26,10 +26,12 @@
 
 main :-
     current_prolog_flag(argv, Argv),
-    (   Argv = [N_s, K_s, P_s, Pairs_s | _]
-    ->  atom_number(N_s, N),
+    (   Argv = [S_s, N_s, K_s, P_s, Pairs_s | _]
+    ->  atom_number(S_s, S),
+        atom_number(N_s, N),
         atom_number(K_s, K),
         atom_number(P_s, P),
+        set_graph_seed(S),
         read_term_from_codes(Pairs_s, Pairs, []),
         is_list(Pairs),
         (   Argv = [_, _, _, _, Algo_atom]
