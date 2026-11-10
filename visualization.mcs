@@ -134,8 +134,8 @@ let MONO_FONT = "Fira Mono"
 let FS_COVER_TITLE = 1.4
 let FS_COVER_SUB = 1.0
 let FS_COVER_BODY = 0.8
-let FS_AUTHOR = 0.6
-let FS_AUTHOR_ID = 0.5
+let FS_AUTHOR = 0.65
+let FS_AUTHOR_ID = 0.55
 
 let FS_TITLE = 0.92
 let FS_SUBTITLE = 0.56
@@ -575,8 +575,8 @@ let AstarPanel = |pending, col|
 let SummaryPanel = |expand, path, verdict, col|
     Panel("Resultado", verdict, [],
           [["Explorados", to_string(len(expand))],
-           ["Saltos", to_string(len(path) - 1)],
-           ["Peso", num1(path_cost(path))]],
+           ["Passos", to_string(len(path) - 1)],
+           ["Distância", num1(path_cost(path))]],
           COLS_SUMMARY, col, "", 0)
 
 # Resumo da rede (slide "O grafo").
@@ -586,8 +586,8 @@ let GraphInfoPanel = ||
            ["Arestas", to_string(len(GRAPH_EDGES))],
            ["Vizinhos (K)", to_string(SW_K)],
            ["Reconexão (p)", to_string(SW_P)],
-           ["Início", to_string(START_ID)],
-           ["Objetivo", to_string(GOAL_ID)]],
+           ["Origem", to_string(START_ID)],
+           ["Destino", to_string(GOAL_ID)]],
           COLS_SUMMARY, GRAY, "", 0)
 
 
@@ -698,7 +698,7 @@ let ASTAR_SPEC = [
     |i| ASTAR_COLOR,
     |i| Chain(take(ASTAR_EXPAND, i + 1)),
     |i| [],
-    |i| "expandir " + to_string(ASTAR_EXPAND[i]) + "   •   lista aberta: " + to_string(unique_len(ASTAR_PENDING[i])),
+    |i| "expandir " + to_string(ASTAR_EXPAND[i]) + "   •   pendentes: " + to_string(unique_len(ASTAR_PENDING[i])),
     |i| AstarOverlay(ASTAR_PENDING[i], ASTAR_COLOR),
     |i| AstarPanel(ASTAR_PENDING[i], ASTAR_COLOR),
     |i| head_or_none(map(ASTAR_PENDING[i], |e| e[0]))
@@ -710,7 +710,7 @@ let BEST_SPEC = [
     |i| BEST_COLOR,
     |i| filter(take(BEST_PRED, i + 1), |e| len(e) > 0),
     |i| [],
-    |i| "expandir " + to_string(BEST_STEPS[i][0]) + "   •   novos: " + to_string(len(BEST_STEPS[i][1])) + "   •   lista aberta: " + to_string(len(BEST_PENDING[i])),
+    |i| "expandir " + to_string(BEST_STEPS[i][0]) + "   •   novos: " + to_string(len(BEST_STEPS[i][1])) + "   •   pendentes: " + to_string(len(BEST_PENDING[i])),
     |i| BestOverlay(BEST_PENDING[i], BEST_STEPS[i][1], BEST_COLOR),
     |i| ScoredPanel(BEST_PENDING[i], "h", "Nós a serem visitados", "menor h primeiro", "próximo", BEST_COLOR),
     |i| BEST_STEPS[i][2]
@@ -722,7 +722,7 @@ let HILL_SPEC = [
     |i| HILL_COLOR,
     |i| Chain(take(HILL_EXPAND, i + 1)),
     |i| [],
-    |i| "em " + to_string(HILL_STEPS[i][0]) + "   •   candidatos: " + to_string(len(HILL_STEPS[i][1])),
+    |i| "nó " + to_string(HILL_STEPS[i][0]) + "   •   candidatos: " + to_string(len(HILL_STEPS[i][1])),
     |i| HillOverlay(HILL_STEPS[i][0], HILL_STEPS[i][1], HILL_COLOR),
     |i| ScoredPanel(sort(HILL_STEPS[i][1], |c| c[1]), "w", "Candidatos", "menor peso de aresta", "mín", HILL_COLOR),
     |i| HILL_STEPS[i][2]
@@ -899,8 +899,8 @@ let ComparisonTable = || {
     return block {
         . TextAt("Algoritmo", FS_TABLE_HEAD, DARK_GRAY, TABLE_COLS[0], TABLE_TOP, "l", 2)
         . TextAt("Explorados", FS_TABLE_HEAD, DARK_GRAY, TABLE_COLS[1], TABLE_TOP, "r", 1.4)
-        . TextAt("Saltos", FS_TABLE_HEAD, DARK_GRAY, TABLE_COLS[2], TABLE_TOP, "r", 1.0)
-        . TextAt("Peso", FS_TABLE_HEAD, DARK_GRAY, TABLE_COLS[3], TABLE_TOP, "r", 1.0)
+        . TextAt("Passos", FS_TABLE_HEAD, DARK_GRAY, TABLE_COLS[2], TABLE_TOP, "r", 1.0)
+        . TextAt("Distância", FS_TABLE_HEAD, DARK_GRAY, TABLE_COLS[3], TABLE_TOP, "r", 1.0)
         . stroke{LIGHT_GRAY, 1} Line([TABLE_LEFT, TABLE_TOP - 0.2, 0], [TABLE_RIGHT, TABLE_TOP - 0.2, 0])
         for ([i, a] in enumerate(ALGOS)) {
             let y = TABLE_TOP - 0.5 - i * TABLE_ROW_H
@@ -1039,7 +1039,7 @@ slide "Dijkstra"
     play Set()
 
     title = Title("Dijkstra:  custo uniforme, expande por distância")
-    subtitle = Subtitle(title, ["lista aberta = nós da fronteira; expande o menor g"], darken(DIJK_COLOR), FS_SUBTITLE)
+    subtitle = Subtitle(title, ["expande todos os subcaminhos, minimizando", MathText("g", FS_SUBTITLE), "= distância total até o nó"], darken(DIJK_COLOR), FS_SUBTITLE)
     play Write(0.5, [&title, &subtitle])
 
     caption = Caption("Passo 0   •   início no nó " + to_string(START_ID))
@@ -1051,7 +1051,7 @@ slide "Dijkstra"
     play Write(0.8, [&path])
 
     caption = Caption("Caminho: " + path_str(DIJK_PATH))
-    panel = SummaryPanel(DIJK_EXPAND, DIJK_PATH, "expande o menor g", DIJK_COLOR)
+    panel = SummaryPanel(DIJK_EXPAND, DIJK_PATH, "expande o nó com o menor valor de g", DIJK_COLOR)
     play [Set([&caption]), Fade(0.5, [&panel])]
 
 slide "A*"
@@ -1069,8 +1069,8 @@ slide "A*"
 
     title = Title("A*:  guiado por heurística")
     subtitle = Subtitle(title,
-                        ["pontua a lista aberta por", MathText("f = g + h", FS_SUBTITLE),
-                         "com", MathText("h", FS_SUBTITLE), "= distância em linha reta até o objetivo"],
+                        ["usa", MathText("f = g + h", FS_SUBTITLE),
+                         "para ordenar os nós, com", MathText("h", FS_SUBTITLE), "= distância em linha reta até o destino"],
                         darken(ASTAR_COLOR), FS_SUBTITLE)
     play Write(0.5, [&title, &subtitle])
 
@@ -1101,7 +1101,7 @@ slide "Best-First"
 
     title = Title("Best-First: escolhe o nó com melhor valor de heurística, de forma gulosa")
     subtitle = Subtitle(title,
-                        ["ordena a lista aberta só por", MathText("h", FS_SUBTITLE),
+                        ["ordena os nós usando apenas", MathText("h", FS_SUBTITLE),
                          "= distância em linha reta até o objetivo, ignorando o custo percorrido"],
                         darken(BEST_COLOR), FS_SUBTITLE)
     play Write(0.5, [&title, &subtitle])
@@ -1133,7 +1133,7 @@ slide "Hill Climbing"
 
 
     title = Title("Hill Climbing: guloso, sem backtracking")
-    subtitle = Subtitle(title, ["sempre pula para o vizinho não visitado com o menor peso de aresta"], darken(HILL_COLOR), FS_SUBTITLE)
+    subtitle = Subtitle(title, ["vai para o vizinho nã o visitado mais próximo do nó atual "], darken(HILL_COLOR), FS_SUBTITLE)
     play Write(0.5, [&title, &subtitle])
 
 
@@ -1168,7 +1168,7 @@ slide "BFS"
     play Set()
 
     title = Title("Busca em Largura:  explora camada por camada")
-    subtitle = Subtitle(title, ["fila FIFO expande todos os nós na distância d antes de d+1; cor mais clara = camada mais profunda"], darken(BFS_COLOR), FS_SUBTITLE)
+    subtitle = Subtitle(title, ["fila (FIFO) expande todos os nós na camada", MathText("n", FS_SUBTITLE), "antes de", MathText("n+1", FS_SUBTITLE), " •  cor mais clara = camada mais profunda"], darken(BFS_COLOR), FS_SUBTITLE)
     play Write(0.5, [&title, &subtitle])
 
     caption = Caption("Passo 0   •   início no nó " + to_string(START_ID))
@@ -1197,7 +1197,7 @@ slide "DFS"
     play Set()
 
     title = Title("Busca em Profundidade:  explora cada caminho até o fim")
-    subtitle = Subtitle(title, ["pilha LIFO: escolhe o vizinho mais profundo não visitado (critério: profundidade máxima)"], darken(DFS_COLOR), FS_SUBTITLE)
+    subtitle = Subtitle(title, ["pilha (LIFO), escolhe o vizinho mais profundo não visitado"], darken(DFS_COLOR), FS_SUBTITLE)
     play Write(0.5, [&title, &subtitle])
 
     caption = Caption("Passo 0   •   início no nó " + to_string(START_ID))
