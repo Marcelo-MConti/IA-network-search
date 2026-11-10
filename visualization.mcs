@@ -23,7 +23,7 @@ import std.scene
 #
 # gen.graph20: Hill Climbing chega no destino
 # START -> 11, GOAL -> 6
-import gen.graph20 
+import gen.graph20
 
 
 background = WHITE
@@ -938,7 +938,7 @@ mesh table = []        # tabela comparativa
 # SLIDES
 # =============================================================================
 
-slide "Introdução"
+slide "01 Introdução"
     title = to_side{UP, 0.5}
             center{ORIGIN}
             color{BLACK}
@@ -972,7 +972,7 @@ slide "Introdução"
     
     authors = []
 
-slide "O grafo"
+slide "02 O grafo"
     title = []
     subtitle = []
     intro = []
@@ -1025,7 +1025,7 @@ slide "O grafo"
 # Slides dos algoritmos: mesmo esqueleto (limpa camadas -> título -> RunSearch ->
 # caminho final + resumo)
 # -----------------------------------------------------------------------------
-slide "Dijkstra"
+slide "03 Dijkstra"
     title = []
     subtitle = []
     region = []
@@ -1054,7 +1054,7 @@ slide "Dijkstra"
     panel = SummaryPanel(DIJK_EXPAND, DIJK_PATH, "expande o nó com o menor valor de g", DIJK_COLOR)
     play [Set([&caption]), Fade(0.5, [&panel])]
 
-slide "A*"
+slide "04 A-star"
     title = []
     subtitle = []
     region = []
@@ -1086,7 +1086,7 @@ slide "A*"
     panel = SummaryPanel(ASTAR_EXPAND, ASTAR_PATH, "expande o menor f = g + h", ASTAR_COLOR)
     play [Set([&caption]), Fade(0.5, [&panel])]
 
-slide "Best-First"
+slide "05 Best-First"
     title = []
     subtitle = []
     region = []
@@ -1118,7 +1118,7 @@ slide "Best-First"
     panel = SummaryPanel(BEST_EXPAND, BEST_PATH, "expande o menor h, ignora o custo", BEST_COLOR)
     play [Set([&caption]), Fade(0.5, [&panel])]
 
-slide "Hill Climbing"
+slide "06 Hill Climbing"
     title = []
     subtitle = []
     region = []
@@ -1133,7 +1133,7 @@ slide "Hill Climbing"
 
 
     title = Title("Hill Climbing: guloso, sem backtracking")
-    subtitle = Subtitle(title, ["vai para o vizinho nã o visitado mais próximo do nó atual "], darken(HILL_COLOR), FS_SUBTITLE)
+    subtitle = Subtitle(title, ["vai para o vizinho não visitado mais próximo do nó atual "], darken(HILL_COLOR), FS_SUBTITLE)
     play Write(0.5, [&title, &subtitle])
 
 
@@ -1154,7 +1154,7 @@ slide "Hill Climbing"
     panel = SummaryPanel(HILL_EXPAND, HILL_PATH, hill_verdict, HILL_COLOR)
     play [Set([&caption]), Fade(0.5, [&panel])]
 
-slide "BFS"
+slide "07 BFS"
     title = []
     subtitle = []
     region = []
@@ -1183,7 +1183,7 @@ slide "BFS"
     panel = SummaryPanel(BFS_EXPAND, BFS_PATH, "caminho de menos saltos", BFS_COLOR)
     play [Set([&caption]), Fade(0.5, [&panel])]
 
-slide "DFS"
+slide "08 DFS"
     title = []
     subtitle = []
     region = []
@@ -1216,7 +1216,7 @@ slide "DFS"
 # -----------------------------------------------------------------------------
 # Comparação
 # -----------------------------------------------------------------------------
-slide "Comparação"
+slide "09 Comparação"
     title = []
     subtitle = []
     base = []
