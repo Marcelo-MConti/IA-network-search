@@ -5,7 +5,7 @@ astar_busca(Vf, _, _, [(_-Dist-(Vf-CaminhoAtual)) | _], Caminho, Dist, _Fechados
     reverse(CaminhoAtual, Caminho), !.
 
 astar_busca(Vf, Vertices, Arestas, Fila, Caminho, Dist, Fechados) :-
-    Fila = [(Atual-DistAtual-(Atual-CaminhoAtual)) | Resto],
+    Fila = [(_Fn-DistAtual-(Atual-CaminhoAtual)) | Resto],
 
     % encontrando todos os vizinhos do nó Atual (não visitados e não já
     % expandidos - um conjunto fechado evita re-expansão infinita e, como a
@@ -33,7 +33,7 @@ astar_busca(Vf, Vertices, Arestas, Fila, Caminho, Dist, Fechados) :-
     astar_busca(Vf, Vertices, Arestas, FilaOrdenada,
                 Caminho, Dist, [Atual | Fechados]).
 
-astar(Vi, Vertices, Arestas, Caminho, Dist) :-
+astar(Vi, Vf, Vertices, Arestas, Caminho, Dist) :-
     member(v(Vi, _, _), Vertices),
     member(v(Vf, _, _), Vertices),
     astar_busca(Vf, Vertices, Arestas, [(0-0-(Vi-[Vi]))], Caminho, Dist, [Vi]).
