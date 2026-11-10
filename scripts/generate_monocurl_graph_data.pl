@@ -123,7 +123,7 @@ dij_exp(Vf, _, [(Cur-(Vf-Path)) | _], _, ExplAcc, OpenAcc, PickAcc,
     retractall(dij_relax(_)), assert(dij_relax(RelaxRows)),
     retractall(dij_pred(_)), assert(dij_pred(PredRows)),
     retractall(dij_g(_)), assert(dij_g(Gs)),
-    assert_results(dij, Order, Path, Cur, reach), !.
+    assert_results(dij, Order, Path, Cur, reach).
 
 dij_exp(Vf, Arestas, [(Cur-(Atual-Path)) | Resto], Fechados,
         ExplAcc, OpenAcc, PickAcc, RelaxAcc, PredAcc, GAcc,
@@ -146,7 +146,6 @@ dij_exp(Vf, Arestas, [(Cur-(Atual-Path)) | Resto], Fechados,
             )
         ),
         RelaxRow),
-    !,
     findall(Dn-(Id-[Id | Path]),
         (   ( member(e(Atual, Id, P), Arestas) ; member(e(Id, Atual, P), Arestas) ),
             \+ member(Id, Path),
@@ -154,7 +153,6 @@ dij_exp(Vf, Arestas, [(Cur-(Atual-Path)) | Resto], Fechados,
             Dn is Cur + P
         ),
         Novos),
-    !,
     append(Novos, Resto, NovaFila),
     keysort(NovaFila, FilaOrdenada),
     % Drop stale queue entries for nodes that are already closed, so the
@@ -164,10 +162,16 @@ dij_exp(Vf, Arestas, [(Cur-(Atual-Path)) | Resto], Fechados,
     % the head id (the minimum-g node Dijkstra pops next).
     pack_open_dij(FilaAberta, OpenPairs, Head),
     pred_edge(Atual, Path, PredEdge),
-    !,
-    dij_exp(Vf, Arestas, FilaAberta, [Atual | Fechados], [Atual | ExplAcc],
+    % When the open list empties the goal is unreachable.  throw/1 unwinds the
+    % stack deterministically (no backtracking into findall's choice points,
+    % which is what made plain fail/! loop forever under SWI-Prolog's
+    % last-call optimisation).
+    (   FilaAberta == []
+    ->  throw(unreachable)
+    ;   dij_exp(Vf, Arestas, FilaAberta, [Atual | Fechados], [Atual | ExplAcc],
             [OpenPairs | OpenAcc], [Head | PickAcc], [RelaxRow | RelaxAcc],
-            [PredEdge | PredAcc], [Cur | GAcc], PathFinal, DistOut).
+            [PredEdge | PredAcc], [Cur | GAcc], PathFinal, DistOut)
+    ).
 
 % exclude_closed/3 : remove queue entries (G-(Id-Path)) whose Id is in Closed.
 exclude_closed([], _, []).
@@ -584,33 +588,55 @@ run(N, K, P, Seed, Vi, Vf, Out) :-
     reconecta_arestas(KNN, Vertices, P, Arestas),
     sort(Arestas, ArestasS),
     sort(Vertices, VerticesS),
-    dij_exp(Vf, ArestasS, [(0-(Vi-[Vi]))], [Vi], [], [], [], [], [], [],
-            _PD, _DD),
-    astar_exp(Vf, VerticesS, ArestasS, [(0-0-(Vi-[Vi]))], [], [], [], _PA, _DA),
-    hc_exp(Vi, Vf, ArestasS, [Vi], [], [], 0, _PH),
-    bfs_exp(Vf, ArestasS, [Vi-[Vi]], [], [], _PB),
-    dfs_exp(Vf, ArestasS, [Vi-[Vi]], [], [], [], _Pdfs),
-    best_exp(Vf, VerticesS, ArestasS, [0-(Vi-[Vi])], [], [], [], [], _Pbest),
-    dij(OrderD0, PathD, DistD, _SD),
-    astar(OrderA0, PathA, DistA, _SA),
-    hill(OrderH0, PathH, DistH, StatusH),
-    bfs(OrderB, PathB, _, _),
-    dfs(OrderDfs, PathDfs, _, _),
-    best(OrderBest0, PathBest, _, _),
-    best_steps(BestSteps),
-    best_pending(BestPending),
-    best_pred(BestPred),
-    path_dist(PathBest, ArestasS, DistBest),
-    astar_steps(AstarSteps),
-    astar_pending(AstarPending),
-    dij_open(DijOpen),
-    dij_pick(DijPick),
-    dij_relax(DijRelax),
-    dij_pred(DijPred),
-    dij_g(DijG),
-    hill_steps(HillSteps),
-    bfs_steps(BfsSteps),
-    dfs_steps(DfsSteps),
+    % Run the instrumented searches.  On seeds where the goal is unreachable a
+    % search would spin forever under SWI-Prolog's tail-call handling of
+    % findall/5, so each search throws unreachable instead; catch it and
+    % degrade to a graph-only output file.
+    catch(
+      ( dij_exp(Vf, ArestasS, [(0-(Vi-[Vi]))], [Vi], [], [], [], [], [], [], _PD, _DD),
+        astar_exp(Vf, VerticesS, ArestasS, [(0-0-(Vi-[Vi]))], [], [], [], _PA, _DA),
+        hc_exp(Vi, Vf, ArestasS, [Vi], [], [], 0, _PH),
+        bfs_exp(Vf, ArestasS, [Vi-[Vi]], [], [], _PB),
+        dfs_exp(Vf, ArestasS, [Vi-[Vi]], [], [], [], _Pdfs),
+        best_exp(Vf, VerticesS, ArestasS, [0-(Vi-[Vi])], [], [], [], [], _Pbest),
+        dij(OrderD0, PathD, DistD, _SD),
+        astar(OrderA0, PathA, DistA, _SA),
+        hill(OrderH0, PathH, DistH, StatusH),
+        bfs(OrderB, PathB, _, _),
+        dfs(OrderDfs, PathDfs, _, _),
+        best(OrderBest0, PathBest, _, _),
+        best_steps(BestSteps),
+        best_pending(BestPending),
+        best_pred(BestPred),
+        path_dist(PathBest, ArestasS, DistBest),
+        astar_steps(AstarSteps),
+        astar_pending(AstarPending),
+        dij_open(DijOpen),
+        dij_pick(DijPick),
+        dij_relax(DijRelax),
+        dij_pred(DijPred),
+        dij_g(DijG),
+        hill_steps(HillSteps),
+        bfs_steps(BfsSteps),
+        dfs_steps(DfsSteps)
+      ),
+      unreachable,
+      ( % Goal unreachable: empty search results, graph is still emitted.
+        format(user_error,
+               'WARNING: goal ~w unreachable from ~w in N=~w K=~w P=~w seed=~w graph; search results empty~n',
+               [Vf, Vi, N, K, P, Seed]),
+        OrderD0 = [], PathD = [], DistD = 0,
+        OrderA0 = [], PathA = [], DistA = 0,
+        OrderH0 = [], PathH = [], DistH = 0, StatusH = "stuck",
+        OrderBest0 = [], PathBest = [], DistBest = 0,
+        OrderB = [], PathB = [],
+        OrderDfs = [], PathDfs = [],
+        DijOpen = [], DijPick = [], DijRelax = [], DijPred = [], DijG = [],
+        AstarSteps = [], AstarPending = [],
+        HillSteps = [], BfsSteps = [], DfsSteps = [],
+        BestSteps = [], BestPending = [], BestPred = []
+      )
+    ),
     % The naive frontier-based searches may expand the same node more than
     % once (via different paths). For visualization we de-duplicate the
     % expansion sequence (first-visit order) so the animation shows the set of
