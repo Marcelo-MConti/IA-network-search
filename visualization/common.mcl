@@ -73,8 +73,8 @@ let STALE_COLOR = [0.55, 0.55, 0.58, 1]
 let EDGE_W = 0.7        # arestas do grafo
 let NODE_STROKE = 2
 let TREE_W = 2.5        # árvore / trilha da busca
-let RELAX_W = 1.5       # arestas de relaxamento (Dijkstra) e guia h (A*)
-let HILL_W = 2.5        # arestas candidatas da escalada
+let RELAX_W = 2.0       # arestas de relaxamento (Dijkstra) e guia h (A*)
+let HILL_W = 3.0        # arestas candidatas da escalada
 let PATH_W = 4.5        # caminho final
 let ANIM_EDGE_W = 2.0   # arestas durante animação de construção
 
@@ -139,8 +139,18 @@ let node_fill = |graph| {
 
 # Espessura das arestas coloridas na animação de construção: mais fina em grafos grandes.
 let anim_edge_w = |graph| {
-    if (graph["n"] > 50) { return 1.0 }
+    if (graph["n"] > 50) { return 0.8 }
     return ANIM_EDGE_W
+}
+
+let rewired_edge_w = |graph| {
+    if (graph["n"] > 50) { return 0.8 }
+    return 1.6
+}
+
+let tree_w = |graph| {
+    if (graph["n"] > 50) { return 1.8 }
+    return TREE_W
 }
 
 
@@ -267,7 +277,7 @@ let GraphEdges = |graph| stroke{EDGE_COLOR, EDGE_W} z_index{Z_EDGE} EdgeSet(grap
 
 let KNNEdges = |graph| stroke{KNN_EDGE_COLOR, EDGE_W} z_index{Z_EDGE} EdgeSet(graph, graph["knn_edges"])
 
-let RewiredEdges = |graph| stroke{REWIRED_EDGE_COLOR, 1.6} z_index{Z_TREE} EdgeSet(graph, graph["rewired_edges"])
+let RewiredEdges = |graph| stroke{REWIRED_EDGE_COLOR, rewired_edge_w(graph)} z_index{Z_TREE} EdgeSet(graph, graph["rewired_edges"])
 
 let AllNodes = |graph|
     z_index{Z_NODE}
@@ -319,7 +329,7 @@ let CandidateRing = |graph, id, c|
         tag{id}
         z_index{Z_RING}
         fill{CLEAR}
-        stroke{c, 1.75}
+        stroke{c, 2.25}
         dashed{[0.4, 0.4]}
         center{node_local(graph, id)}
         Circle(node_radius(graph) * 1.65))
@@ -353,7 +363,7 @@ let PathMesh = |graph, path, col|
         stroke{darken(col), PATH_W}
         Polyline(map(path, |id| node_local(graph, id))))
 
-let TreeEdges = |graph, edge_list, col| stroke{col, TREE_W} z_index{Z_TREE} EdgeSet(graph, edge_list)
+let TreeEdges = |graph, edge_list, col| stroke{col, tree_w(graph)} z_index{Z_TREE} EdgeSet(graph, edge_list)
 
 let NodeTag = |graph, id, str, c, off| {
     let t = center{graph_screen(graph, id) + off} color{c} Sans(str, FS_TAG)
@@ -442,9 +452,7 @@ let GraphInfoPanel = |graph|
           [["Nós", to_string(len(graph["nodes"]))],
            ["Arestas", to_string(len(graph["edges"]))],
            ["Vizinhos (K)", to_string(graph["k"])],
-           ["Reconexão (p)", to_string(graph["p"])],
-           ["Origem", to_string(graph["start_id"])],
-           ["Destino", to_string(graph["goal_id"])]],
+           ["Reconexão (p)", to_string(graph["p"])]],
           COLS_SUMMARY, GRAY, "", 0)
 
 

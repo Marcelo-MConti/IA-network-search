@@ -40,7 +40,7 @@ import common
 background = WHITE
 
 
-let graph = graph20
+let graph = graph150
 
 let dijkstra = graph["dijkstra"]
 let astar = graph["astar"]
@@ -210,8 +210,8 @@ slide "A. O grafo"
     play Write(0.5, [&title, &subtitle])
 
     # --- Fase 1: Vértices aleatórios ---
-    caption = Caption("Fase 1: " + to_string(len(graph["nodes"])) + " vértices posicionados aleatoriamente no plano")
-    play Fade(0.3, [&caption])
+    caption = Footer("Fase 1: " + to_string(len(graph["nodes"])) + " vértices posicionados aleatoriamente no plano")
+    play Write(0.3, [&caption])
 
     base_nodes = AllNodes(centered_graph)
     labels = NodeLabels(centered_graph, [])
@@ -222,8 +222,8 @@ slide "A. O grafo"
     play Wait(0.5)
 
     # --- Fase 2: Grafo KNN ---
-    caption = Caption("Fase 2: Cada nó conecta aos seus K=" + to_string(graph["k"]) + " vizinhos mais próximos (KNN)")
-    play Fade(0.3, [&caption])
+    caption = Footer("Fase 2: Cada nó conecta aos seus K=" + to_string(graph["k"]) + " vizinhos mais próximos (KNN)")
+    play Write(0.3, [&caption])
 
     play AnimateEdgesWithNodes(centered_graph, &knn_edges, &highlight, centered_graph["knn_edges"], KNN_EDGE_COLOR, anim_edge_w(centered_graph), 0.03)
     play Wait(0.5)
@@ -231,15 +231,15 @@ slide "A. O grafo"
     play Fade(0.3, [&knn_edges])
 
     # --- Fase 3: Reconexão (Rewiring) ---
-    caption = Caption("Fase 3: Reconexão com probabilidade p=" + to_string(graph["p"]) + " (arestas vermelhas são reconectadas)")
-    play Fade(0.3, [&caption])
+    caption = Footer("Fase 3: Reconexão com probabilidade p=" + to_string(graph["p"]) + " (arestas vermelhas são reconectadas)")
+    play Write(0.3, [&caption])
 
     play AnimateRewiredEdges(centered_graph, &rewired_edges, &highlight, centered_graph["rewired_edges"], 0.04)
     play Wait(0.5)
 
     # --- Fase 4: Grafo final ---
-    caption = Caption("Rede Pequeno Mundo final: estrutura local (KNN) + atalhos globais (rewiring)")
-    play Fade(0.3, [&caption])
+    caption = Footer("Rede Pequeno Mundo final: estrutura local (KNN) + atalhos globais (rewiring)")
+    play Write(0.3, [&caption])
 
     play Wait(0.5)
 
@@ -271,7 +271,7 @@ slide "A. O grafo"
     base_nodes = AllNodes(graph)
     labels = NodeLabels(graph, [[graph["start_id"], START_COLOR], [graph["goal_id"], GOAL_COLOR]])
     knn_edges = stroke{EDGE_COLOR, EDGE_W} z_index{Z_EDGE} EdgeSet(graph, graph["knn_edges"])
-    rewired_edges = stroke{EDGE_COLOR, 1.6} z_index{Z_TREE} EdgeSet(graph, graph["rewired_edges"])
+    rewired_edges = stroke{EDGE_COLOR, EDGE_W} z_index{Z_EDGE} EdgeSet(graph, graph["rewired_edges"])
     endpoints = [Endpoint(graph, graph["start_id"], START_COLOR), Endpoint(graph, graph["goal_id"], GOAL_COLOR)]
 
     # Move o grafo inteiro (nós, arestas coloridas e rótulos) para a esquerda;
