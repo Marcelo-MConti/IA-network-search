@@ -105,7 +105,7 @@ let FS_AUTHOR = 0.65
 let FS_AUTHOR_ID = 0.55
 
 let FS_TITLE = 0.92
-let FS_SUBTITLE = 0.56
+let FS_SUBTITLE = 0.64
 let FS_CAPTION = 0.56
 let FS_NODE_ID = 4.75    # em coordenadas locais do grafo (efetivo = FS_NODE_ID * unidade)
 let FS_TAG = 0.5         # rótulos g= / f= ao lado dos nós
@@ -141,6 +141,25 @@ let node_fill = |graph| {
 let anim_edge_w = |graph| {
     if (graph["n"] > 50) { return 0.8 }
     return ANIM_EDGE_W
+}
+
+let step_delay = |graph| {
+    let d = 0.5 * 20.0 / to_float(graph["n"])
+    if (d < 0.05) { return 0.05 }
+    return d
+}
+
+let anim_delay = |graph| {
+    let d = 0.03 * 20.0 / to_float(graph["n"])
+    if (d < 0.005) { return 0.005 }
+    return d
+}
+
+let anim_scale = |graph| {
+    let s = 20.0 / to_float(graph["n"])
+    if (s > 1) { return 1 }
+    if (s < 0.25) { return 0.25 }
+    return s
 }
 
 let rewired_edge_w = |graph| {
@@ -366,6 +385,7 @@ let PathMesh = |graph, path, col|
 let TreeEdges = |graph, edge_list, col| stroke{col, tree_w(graph)} z_index{Z_TREE} EdgeSet(graph, edge_list)
 
 let NodeTag = |graph, id, str, c, off| {
+    if (graph["n"] > 50) { return [] }
     let t = center{graph_screen(graph, id) + off} color{c} Sans(str, FS_TAG)
     return [
         z_index{Z_TAG_BG} stroke{CLEAR} fill{alpha{0.9} WHITE} BoundingBox(t, 0.025),
@@ -446,14 +466,29 @@ let SummaryPanel = |graph, expand, path, verdict, col|
            ["Distância", num1(graph_path_cost(graph, path))]],
           COLS_SUMMARY, col, "", 0)
 
-# Resumo da rede (slide "O grafo").
-let GraphInfoPanel = |graph|
-    Panel("Rede", "Pequeno Mundo", [],
-          [["Nós", to_string(len(graph["nodes"]))],
-           ["Arestas", to_string(len(graph["edges"]))],
-           ["Vizinhos (K)", to_string(graph["k"])],
-           ["Reconexão (p)", to_string(graph["p"])]],
-          COLS_SUMMARY, GRAY, "", 0)
+# Resumo da rede (slide "O grafo"), com altura reduzida e centralizado.
+let GraphInfoPanel = |graph| {
+    let rows = [
+        ["Nós", to_string(len(graph["nodes"]))],
+        ["Arestas", to_string(len(graph["edges"]))],
+        ["Vizinhos (K)", to_string(graph["k"])],
+        ["Reconexão (p)", to_string(graph["p"])]
+    ]
+    let n = len(rows)
+    let row_h = 0.3
+    let height = 0.7 + n * row_h
+    let half_h = height / 2
+    return shift{PANEL_CENTER} block {
+        . z_index{Z_PANEL_BG} fill{alpha{0.06} GRAY} stroke{darken(GRAY), 1.2} Rect([PANEL_W, height])
+        . TextAt("Rede", FS_PANEL_HEAD, darken(GRAY), 0, half_h - 0.24, "c", PANEL_W - 2 * PANEL_PAD)
+        . TextAt("Pequeno Mundo", FS_PANEL_SUB, DARK_GRAY, 0, half_h - 0.5, "c", PANEL_W - 2 * PANEL_PAD)
+        for ([i, row] in enumerate(rows)) {
+            let y = half_h - 0.75 - i * row_h
+            . TextAt(row[0], FS_ROW, BLACK, -PANEL_W / 2 + PANEL_PAD, y, "l", PANEL_W - 2 * PANEL_PAD)
+            . TextAt(row[1], FS_ROW, BLACK, PANEL_W / 2 - PANEL_PAD, y, "r", PANEL_W - 2 * PANEL_PAD)
+        }
+    }
+}
 
 
 # =============================================================================
@@ -560,8 +595,8 @@ let RunSearch = |graph, &region, &labels, &trail, &cands, &pick, &panel, &path, 
         path = path_of(i)
         caption = StepCaption(i, caption_of(i))
         play [
-            Grow(0.2, [&region]),
-            Grow(0.2, [&trail]),
+            Grow(0.2 * anim_scale(graph), [&region]),
+            Grow(0.2 * anim_scale(graph), [&trail]),
             Set([&labels, &path, &caption])
         ]
 
@@ -576,12 +611,12 @@ let RunSearch = |graph, &region, &labels, &trail, &cands, &pick, &panel, &path, 
             pick = PickMark(graph, nxt, col)
         }
 
-        play Fade(0.25, [&cands, &pick, &panel])
-        play Wait(0.5)
+        play Fade(0.25 * anim_scale(graph), [&cands, &pick, &panel])
+        play Wait(step_delay(graph))
 
         pick = []
         cands = []
-        play Fade(0.25, [&cands, &pick])
+        play Fade(0.25 * anim_scale(graph), [&cands, &pick])
     }
 }
 

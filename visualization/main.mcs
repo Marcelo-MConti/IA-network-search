@@ -40,7 +40,7 @@ import common
 background = WHITE
 
 
-let graph = graph150
+let graph = graph150 
 
 let dijkstra = graph["dijkstra"]
 let astar = graph["astar"]
@@ -205,53 +205,55 @@ slide "A. O grafo"
     var centered_graph = graph
     centered_graph["centered"] = 1
 
-    title = Title("Construção de uma Rede Pequeno Mundo (Small World)")
+    title = Title("Uma rede Pequeno Mundo")
     subtitle = Subtitle(title, ["N=" + to_string(len(graph["nodes"])) + ", K=" + to_string(graph["k"]) + ", p=" + to_string(graph["p"])], DARK_GRAY, FS_SUBTITLE)
-    play Write(0.5, [&title, &subtitle])
+    play Write(0.5 * anim_scale(graph), [&title, &subtitle])
 
     # --- Fase 1: Vértices aleatórios ---
     caption = Footer("Fase 1: " + to_string(len(graph["nodes"])) + " vértices posicionados aleatoriamente no plano")
-    play Write(0.3, [&caption])
+    play Write(0.3 * anim_scale(graph), [&caption])
 
     base_nodes = AllNodes(centered_graph)
     labels = NodeLabels(centered_graph, [])
     play [
-        Grow(0.5, [&base_nodes]),
-        Fade(0.3, [&labels])
+        Grow(0.5 * anim_scale(graph), [&base_nodes]),
+        Fade(0.3 * anim_scale(graph), [&labels])
     ]
-    play Wait(0.5)
+    play Wait(step_delay(graph))
 
     # --- Fase 2: Grafo KNN ---
     caption = Footer("Fase 2: Cada nó conecta aos seus K=" + to_string(graph["k"]) + " vizinhos mais próximos (KNN)")
-    play Write(0.3, [&caption])
+    play Write(0.3 * anim_scale(graph), [&caption])
 
-    play AnimateEdgesWithNodes(centered_graph, &knn_edges, &highlight, centered_graph["knn_edges"], KNN_EDGE_COLOR, anim_edge_w(centered_graph), 0.03)
-    play Wait(0.5)
+    play AnimateEdgesWithNodes(centered_graph, &knn_edges, &highlight, centered_graph["knn_edges"], KNN_EDGE_COLOR, anim_edge_w(centered_graph), anim_delay(centered_graph))
+    play Wait(step_delay(graph))
 
-    play Fade(0.3, [&knn_edges])
+    play Fade(0.3 * anim_scale(graph), [&knn_edges])
 
     # --- Fase 3: Reconexão (Rewiring) ---
-    caption = Footer("Fase 3: Reconexão com probabilidade p=" + to_string(graph["p"]) + " (arestas vermelhas são reconectadas)")
-    play Write(0.3, [&caption])
+    caption = Footer("Fase 3: Reconexão com probabilidade p=" + to_string(graph["p"]) + " (arestas vermelhas)")
+    play Write(0.3 * anim_scale(graph), [&caption])
 
-    play AnimateRewiredEdges(centered_graph, &rewired_edges, &highlight, centered_graph["rewired_edges"], 0.04)
-    play Wait(0.5)
+    play AnimateRewiredEdges(centered_graph, &rewired_edges, &highlight, centered_graph["rewired_edges"], anim_delay(centered_graph))
+    play Wait(step_delay(graph))
 
     # --- Fase 4: Grafo final ---
-    caption = Footer("Rede Pequeno Mundo final: estrutura local (KNN) + atalhos globais (rewiring)")
-    play Write(0.3, [&caption])
+    caption = Footer("Rede final: estrutura local (KNN) + atalhos globais (reconexão)")
+    play Write(0.3 * anim_scale(graph), [&caption])
 
-    play Wait(0.5)
+    play Wait(step_delay(graph))
 
     play Wait(1.0)
 
 
+    caption = []
+    play Write(0.2 * anim_scale(graph), [&caption])
     caption = Footer("A rede Pequeno Mundo combina alta clusterização local com caminho médio curto")
-    play Write(0.5, [&caption])
+    play Write(0.5 * anim_scale(graph), [&caption])
     play Wait(1.0)
 
     # --- Transição para o grafo regular (cinza), à esquerda ---
-    play Wait(0.5)
+    play Wait(step_delay(graph))
 
     base = []
     # Valores iniciais (centralizados).
@@ -276,8 +278,8 @@ slide "A. O grafo"
 
     # Move o grafo inteiro (nós, arestas coloridas e rótulos) para a esquerda;
     # a cor das arestas morfa gradualmente para cinza, e os endpoints transitam.
-    play Trans(0.8, [&base_nodes, &knn_edges, &rewired_edges, &labels, &endpoints], 0, ease_in_out)
-    play Wait(0.2)
+    play Trans(0.8 * anim_scale(graph), [&base_nodes, &knn_edges, &rewired_edges, &labels, &endpoints], 0, ease_in_out)
+    play Wait(step_delay(graph))
 
     # Ao final: arestas cinzas reais surgem e as coloridas desaparecem (sem animação).
     final_edges = GraphEdges(graph)
@@ -305,7 +307,7 @@ slide "A. O grafo"
         [&start_node_caption_key, &start_node_caption_label, &goal_node_caption_key, &goal_node_caption_label]
 
     play [
-        Write(0.6, [&caption])
+        Write(0.6 * anim_scale(graph), [&caption])
     ]
 
     start_node_caption_key = []
@@ -333,20 +335,20 @@ slide "B. Dijkstra"
     play Set()
 
     title = Title("Dijkstra:  custo uniforme, expande por distância")
-    subtitle = Subtitle(title, ["expande todos os subcaminhos, minimizando", MathText("g", FS_SUBTITLE), "= distância total até o nó"], darken(DIJK_COLOR), FS_SUBTITLE)
-    play Write(0.5, [&title, &subtitle])
+    subtitle = Subtitle(title, ["expande todos os subcaminhos, minimizando g = distância total até o nó"], darken(DIJK_COLOR), FS_SUBTITLE)
+    play Write(0.5 * anim_scale(graph), [&title, &subtitle])
 
     caption = Caption("Passo 0   •   início no nó " + to_string(graph["start_id"]))
-    play Fade(0.3, [&caption])
+    play Fade(0.3 * anim_scale(graph), [&caption])
 
     play RunSearch(graph, &region, &labels, &trail, &cands, &pick, &panel, &path, &caption, DIJK_SPEC)
 
     path = PathMesh(graph, dijkstra["path"], DIJK_COLOR)
-    play Write(0.8, [&path])
+    play Write(0.8 * anim_scale(graph), [&path])
 
     caption = Caption("Caminho: " + path_str(dijkstra["path"]))
     panel = SummaryPanel(graph, dijkstra["expand"], dijkstra["path"], "expande o nó com o menor valor de g", DIJK_COLOR)
-    play [Set([&caption]), Fade(0.5, [&panel])]
+    play [Set([&caption]), Fade(0.5 * anim_scale(graph), [&panel])]
 
 slide "C. A-star"
     title = []
@@ -366,19 +368,19 @@ slide "C. A-star"
                         ["usa", MathText("f = g + h", FS_SUBTITLE),
                          "para ordenar os nós, com", MathText("h", FS_SUBTITLE), "= distância em linha reta até o destino"],
                         darken(ASTAR_COLOR), FS_SUBTITLE)
-    play Write(0.5, [&title, &subtitle])
+    play Write(0.5 * anim_scale(graph), [&title, &subtitle])
 
     caption = Caption("Passo 0   •   início no nó " + to_string(graph["start_id"]))
-    play Fade(0.3, [&caption])
+    play Fade(0.3 * anim_scale(graph), [&caption])
 
     play RunSearch(graph, &region, &labels, &trail, &cands, &pick, &panel, &path, &caption, ASTAR_SPEC)
 
     path = PathMesh(graph, astar["path"], ASTAR_COLOR)
-    play Write(0.8, [&path])
+    play Write(0.8 * anim_scale(graph), [&path])
 
     caption = Caption("Caminho: " + path_str(astar["path"]))
     panel = SummaryPanel(graph, astar["expand"], astar["path"], "expande o menor f = g + h", ASTAR_COLOR)
-    play [Set([&caption]), Fade(0.5, [&panel])]
+    play [Set([&caption]), Fade(0.5 * anim_scale(graph), [&panel])]
 
 slide "D. Best-First"
     title = []
@@ -398,19 +400,19 @@ slide "D. Best-First"
                         ["ordena os nós usando apenas", MathText("h", FS_SUBTITLE),
                          "= distância em linha reta até o objetivo, ignorando o custo percorrido"],
                         darken(BEST_COLOR), FS_SUBTITLE)
-    play Write(0.5, [&title, &subtitle])
+    play Write(0.5 * anim_scale(graph), [&title, &subtitle])
 
     caption = Caption("Passo 0   •   início no nó " + to_string(graph["start_id"]))
-    play Fade(0.3, [&caption])
+    play Fade(0.3 * anim_scale(graph), [&caption])
 
     play RunSearch(graph, &region, &labels, &trail, &cands, &pick, &panel, &path, &caption, BEST_SPEC)
 
     path = PathMesh(graph, best["path"], BEST_COLOR)
-    play Write(0.8, [&path])
+    play Write(0.8 * anim_scale(graph), [&path])
 
     caption = Caption("Caminho: " + path_str(best["path"]))
     panel = SummaryPanel(graph, best["expand"], best["path"], "expande o menor h, ignora o custo", BEST_COLOR)
-    play [Set([&caption]), Fade(0.5, [&panel])]
+    play [Set([&caption]), Fade(0.5 * anim_scale(graph), [&panel])]
 
 slide "E. Hill Climbing"
     title = []
@@ -427,15 +429,15 @@ slide "E. Hill Climbing"
 
     title = Title("Hill Climbing: guloso, sem backtracking")
     subtitle = Subtitle(title, ["vai para o vizinho não visitado mais próximo do nó atual "], darken(HILL_COLOR), FS_SUBTITLE)
-    play Write(0.5, [&title, &subtitle])
+    play Write(0.5 * anim_scale(graph), [&title, &subtitle])
 
     caption = Caption("Passo 0   •   início no nó " + to_string(graph["start_id"]))
-    play Fade(0.3, [&caption])
+    play Fade(0.3 * anim_scale(graph), [&caption])
 
     play RunSearch(graph, &region, &labels, &trail, &cands, &pick, &panel, &path, &caption, HILL_SPEC)
 
     path = PathMesh(graph, hill["path"], HILL_COLOR)
-    play Write(0.8, [&path])
+    play Write(0.8 * anim_scale(graph), [&path])
 
     var hill_verdict = "usa a aresta mais barata"
     if (hill["status"] == "stuck") {
@@ -444,7 +446,7 @@ slide "E. Hill Climbing"
     
     caption = Caption("Caminho: " + path_str(hill["path"]))
     panel = SummaryPanel(graph, hill["expand"], hill["path"], hill_verdict, HILL_COLOR)
-    play [Set([&caption]), Fade(0.5, [&panel])]
+    play [Set([&caption]), Fade(0.5 * anim_scale(graph), [&panel])]
 
 slide "F. BFS"
     title = []
@@ -461,19 +463,19 @@ slide "F. BFS"
 
     title = Title("Busca em Largura:  explora camada por camada")
     subtitle = Subtitle(title, ["fila (FIFO) expande todos os nós na camada", MathText("n", FS_SUBTITLE), "antes de", MathText("n+1", FS_SUBTITLE), " •  cor mais clara = camada mais profunda"], darken(BFS_COLOR), FS_SUBTITLE)
-    play Write(0.5, [&title, &subtitle])
+    play Write(0.5 * anim_scale(graph), [&title, &subtitle])
 
     caption = Caption("Passo 0   •   início no nó " + to_string(graph["start_id"]))
-    play Fade(0.3, [&caption])
+    play Fade(0.3 * anim_scale(graph), [&caption])
 
     play RunSearch(graph, &region, &labels, &trail, &cands, &pick, &panel, &path, &caption, BFS_SPEC)
 
     path = PathMesh(graph, bfs["path"], BFS_COLOR)
-    play Write(0.8, [&path])
+    play Write(0.8 * anim_scale(graph), [&path])
 
     caption = Caption("Caminho: " + path_str(bfs["path"]))
     panel = SummaryPanel(graph, bfs["expand"], bfs["path"], "caminho de menos saltos", BFS_COLOR)
-    play [Set([&caption]), Fade(0.5, [&panel])]
+    play [Set([&caption]), Fade(0.5 * anim_scale(graph), [&panel])]
 
 slide "G. DFS"
     title = []
@@ -490,19 +492,19 @@ slide "G. DFS"
 
     title = Title("Busca em Profundidade:  explora cada caminho até o fim")
     subtitle = Subtitle(title, ["pilha (LIFO), escolhe o vizinho mais profundo não visitado"], darken(DFS_COLOR), FS_SUBTITLE)
-    play Write(0.5, [&title, &subtitle])
+    play Write(0.5 * anim_scale(graph), [&title, &subtitle])
 
     caption = Caption("Passo 0   •   início no nó " + to_string(graph["start_id"]))
-    play Fade(0.3, [&caption])
+    play Fade(0.3 * anim_scale(graph), [&caption])
 
     play RunSearch(graph, &region, &labels, &trail, &cands, &pick, &panel, &path, &caption, DFS_SPEC)
 
     path = PathMesh(graph, dfs["path"], DFS_COLOR)
-    play Write(0.8, [&path])
+    play Write(0.8 * anim_scale(graph), [&path])
 
     caption = Caption("Caminho: " + short_path(dfs["path"]))
     panel = SummaryPanel(graph, dfs["expand"], dfs["path"], "caminho longo, não o mais curto", DFS_COLOR)
-    play [Set([&caption]), Fade(0.5, [&panel])]
+    play [Set([&caption]), Fade(0.5 * anim_scale(graph), [&panel])]
 
 
 # -----------------------------------------------------------------------------
@@ -524,16 +526,16 @@ slide "H. Comparação"
     path = []
     panel = []
     caption = []
-    play Fade(0.5, [&title, &subtitle, &base, &base_nodes, &endpoints, &labels, &region, &trail, &path, &panel, &caption, &knn_edges, &rewired_edges, &final_edges, &highlight])
+    play Fade(0.5 * anim_scale(graph), [&title, &subtitle, &base, &base_nodes, &endpoints, &labels, &region, &trail, &path, &panel, &caption, &knn_edges, &rewired_edges, &final_edges, &highlight])
 
     title = Title("Como cada algoritmo buscou na rede")
     subtitle = Subtitle(title, ["verde = melhor valor da coluna"], DARK_GRAY, FS_SUBTITLE)
-    play Write(0.5, [&title, &subtitle])
+    play Write(0.5 * anim_scale(graph), [&title, &subtitle])
 
     table = ComparisonTable(graph, ALGOS)
-    play Fade(0.5, [&table])
+    play Fade(0.5 * anim_scale(graph), [&table])
 
     caption = Footer("O BFS chega no destino com o menor número de passos, enquanto o A* explora muito menos nós que o Dijkstra.")
-    play Write(0.6, [&caption])
+    play Write(0.6 * anim_scale(graph), [&caption])
     
     print ["dijkstra" -> len(dijkstra["expand"]), "astar" -> len(astar["expand"]), "bfs" -> len(bfs["expand"]), "dfs" -> len(dfs["expand"]), "hill" -> len(hill["expand"])]
