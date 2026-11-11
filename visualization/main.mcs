@@ -40,7 +40,7 @@ import common
 background = WHITE
 
 
-let graph = graph150 
+let graph = graph20
 
 let dijkstra = graph["dijkstra"]
 let astar = graph["astar"]
@@ -173,6 +173,7 @@ mesh highlight = []
 mesh region = []
 mesh trail = []
 mesh cands = []
+mesh edges = []
 mesh pick = []
 mesh path = []
 mesh panel = []
@@ -327,6 +328,7 @@ slide "B. Dijkstra"
     region = []
     trail = []
     cands = []
+    edges = []
     pick = []
     path = []
     panel = []
@@ -341,12 +343,12 @@ slide "B. Dijkstra"
     caption = Caption("Passo 0   •   início no nó " + to_string(graph["start_id"]))
     play Fade(0.3 * anim_scale(graph), [&caption])
 
-    play RunSearch(graph, &region, &labels, &trail, &cands, &pick, &panel, &path, &caption, DIJK_SPEC)
+    play RunSearch(graph, &region, &labels, &trail, &cands, &edges, &pick, &panel, &path, &caption, DIJK_SPEC)
 
     path = PathMesh(graph, dijkstra["path"], DIJK_COLOR)
     play Write(0.8 * anim_scale(graph), [&path])
 
-    caption = Caption("Caminho: " + path_str(dijkstra["path"]))
+    if (graph["n"] <= 50) { caption = Caption("Caminho: " + path_str(dijkstra["path"])) } else { caption = [] }
     panel = SummaryPanel(graph, dijkstra["expand"], dijkstra["path"], "expande o nó com o menor valor de g", DIJK_COLOR)
     play [Set([&caption]), Fade(0.5 * anim_scale(graph), [&panel])]
 
@@ -356,6 +358,7 @@ slide "C. A-star"
     region = []
     trail = []
     cands = []
+    edges = []
     pick = []
     path = []
     panel = []
@@ -373,12 +376,12 @@ slide "C. A-star"
     caption = Caption("Passo 0   •   início no nó " + to_string(graph["start_id"]))
     play Fade(0.3 * anim_scale(graph), [&caption])
 
-    play RunSearch(graph, &region, &labels, &trail, &cands, &pick, &panel, &path, &caption, ASTAR_SPEC)
+    play RunSearch(graph, &region, &labels, &trail, &cands, &edges, &pick, &panel, &path, &caption, ASTAR_SPEC)
 
     path = PathMesh(graph, astar["path"], ASTAR_COLOR)
     play Write(0.8 * anim_scale(graph), [&path])
 
-    caption = Caption("Caminho: " + path_str(astar["path"]))
+    if (graph["n"] <= 50) { caption = Caption("Caminho: " + path_str(astar["path"])) } else { caption = [] }
     panel = SummaryPanel(graph, astar["expand"], astar["path"], "expande o menor f = g + h", ASTAR_COLOR)
     play [Set([&caption]), Fade(0.5 * anim_scale(graph), [&panel])]
 
@@ -388,6 +391,7 @@ slide "D. Best-First"
     region = []
     trail = []
     cands = []
+    edges = []
     pick = []
     path = []
     panel = []
@@ -405,12 +409,12 @@ slide "D. Best-First"
     caption = Caption("Passo 0   •   início no nó " + to_string(graph["start_id"]))
     play Fade(0.3 * anim_scale(graph), [&caption])
 
-    play RunSearch(graph, &region, &labels, &trail, &cands, &pick, &panel, &path, &caption, BEST_SPEC)
+    play RunSearch(graph, &region, &labels, &trail, &cands, &edges, &pick, &panel, &path, &caption, BEST_SPEC)
 
     path = PathMesh(graph, best["path"], BEST_COLOR)
     play Write(0.8 * anim_scale(graph), [&path])
 
-    caption = Caption("Caminho: " + path_str(best["path"]))
+    if (graph["n"] <= 50) { caption = Caption("Caminho: " + path_str(best["path"])) } else { caption = [] }
     panel = SummaryPanel(graph, best["expand"], best["path"], "expande o menor h, ignora o custo", BEST_COLOR)
     play [Set([&caption]), Fade(0.5 * anim_scale(graph), [&panel])]
 
@@ -420,6 +424,7 @@ slide "E. Hill Climbing"
     region = []
     trail = []
     cands = []
+    edges = []
     pick = []
     path = []
     panel = []
@@ -434,7 +439,7 @@ slide "E. Hill Climbing"
     caption = Caption("Passo 0   •   início no nó " + to_string(graph["start_id"]))
     play Fade(0.3 * anim_scale(graph), [&caption])
 
-    play RunSearch(graph, &region, &labels, &trail, &cands, &pick, &panel, &path, &caption, HILL_SPEC)
+    play RunSearch(graph, &region, &labels, &trail, &cands, &edges, &pick, &panel, &path, &caption, HILL_SPEC)
 
     path = PathMesh(graph, hill["path"], HILL_COLOR)
     play Write(0.8 * anim_scale(graph), [&path])
@@ -444,7 +449,7 @@ slide "E. Hill Climbing"
         hill_verdict = "preso em um máximo local"
     }
     
-    caption = Caption("Caminho: " + path_str(hill["path"]))
+    if (graph["n"] <= 50) { caption = Caption("Caminho: " + path_str(hill["path"])) } else { caption = [] }
     panel = SummaryPanel(graph, hill["expand"], hill["path"], hill_verdict, HILL_COLOR)
     play [Set([&caption]), Fade(0.5 * anim_scale(graph), [&panel])]
 
@@ -454,6 +459,7 @@ slide "F. BFS"
     region = []
     trail = []
     cands = []
+    edges = []
     pick = []
     path = []
     panel = []
@@ -468,12 +474,12 @@ slide "F. BFS"
     caption = Caption("Passo 0   •   início no nó " + to_string(graph["start_id"]))
     play Fade(0.3 * anim_scale(graph), [&caption])
 
-    play RunSearch(graph, &region, &labels, &trail, &cands, &pick, &panel, &path, &caption, BFS_SPEC)
+    play RunSearch(graph, &region, &labels, &trail, &cands, &edges, &pick, &panel, &path, &caption, BFS_SPEC)
 
     path = PathMesh(graph, bfs["path"], BFS_COLOR)
     play Write(0.8 * anim_scale(graph), [&path])
 
-    caption = Caption("Caminho: " + path_str(bfs["path"]))
+    if (graph["n"] <= 50) { caption = Caption("Caminho: " + path_str(bfs["path"])) } else { caption = [] }
     panel = SummaryPanel(graph, bfs["expand"], bfs["path"], "caminho de menos saltos", BFS_COLOR)
     play [Set([&caption]), Fade(0.5 * anim_scale(graph), [&panel])]
 
@@ -483,6 +489,7 @@ slide "G. DFS"
     region = []
     trail = []
     cands = []
+    edges = []
     pick = []
     path = []
     panel = []
@@ -497,12 +504,12 @@ slide "G. DFS"
     caption = Caption("Passo 0   •   início no nó " + to_string(graph["start_id"]))
     play Fade(0.3 * anim_scale(graph), [&caption])
 
-    play RunSearch(graph, &region, &labels, &trail, &cands, &pick, &panel, &path, &caption, DFS_SPEC)
+    play RunSearch(graph, &region, &labels, &trail, &cands, &edges, &pick, &panel, &path, &caption, DFS_SPEC)
 
     path = PathMesh(graph, dfs["path"], DFS_COLOR)
     play Write(0.8 * anim_scale(graph), [&path])
 
-    caption = Caption("Caminho: " + short_path(dfs["path"]))
+    if (graph["n"] <= 50) { caption = Caption("Caminho: " + short_path(dfs["path"])) } else { caption = [] }
     panel = SummaryPanel(graph, dfs["expand"], dfs["path"], "caminho longo, não o mais curto", DFS_COLOR)
     play [Set([&caption]), Fade(0.5 * anim_scale(graph), [&panel])]
 
@@ -521,12 +528,14 @@ slide "H. Comparação"
     rewired_edges = []
     final_edges = []
     highlight = []
+    cands = []
+    edges = []
     region = []
     trail = []
     path = []
     panel = []
     caption = []
-    play Fade(0.5 * anim_scale(graph), [&title, &subtitle, &base, &base_nodes, &endpoints, &labels, &region, &trail, &path, &panel, &caption, &knn_edges, &rewired_edges, &final_edges, &highlight])
+    play Fade(0.5 * anim_scale(graph), [&title, &subtitle, &base, &base_nodes, &endpoints, &labels, &region, &trail, &path, &panel, &caption, &knn_edges, &rewired_edges, &final_edges, &highlight, &cands, &edges])
 
     title = Title("Como cada algoritmo buscou na rede")
     subtitle = Subtitle(title, ["verde = melhor valor da coluna"], DARK_GRAY, FS_SUBTITLE)

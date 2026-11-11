@@ -117,7 +117,7 @@ let FS_TABLE = 0.7
 let FS_TABLE_HEAD = 0.64
 let FS_PANEL_BODY = 0.5
 
-let MATH_DROP = 0.11
+let MATH_DROP = 0.13
 
 let TAG_UR = [0.3, 0.12, 0]
 let TAG_UL = [-0.3, 0.12, 0]
@@ -170,6 +170,11 @@ let rewired_edge_w = |graph| {
 let tree_w = |graph| {
     if (graph["n"] > 50) { return 1.8 }
     return TREE_W
+}
+
+let path_w = |graph| {
+    if (graph["n"] > 50) { return 2.5 }
+    return PATH_W
 }
 
 
@@ -379,7 +384,7 @@ let AbandonMark = |graph, id|
 let PathMesh = |graph, path, col|
     graph_embed(graph,
         z_index{Z_PATH}
-        stroke{darken(col), PATH_W}
+        stroke{darken(col), path_w(graph)}
         Polyline(map(path, |id| node_local(graph, id))))
 
 let TreeEdges = |graph, edge_list, col| stroke{col, tree_w(graph)} z_index{Z_TREE} EdgeSet(graph, edge_list)
@@ -498,72 +503,86 @@ let GraphInfoPanel = |graph| {
 # Dijkstra: rótulo g do nó expandido, anéis na lista aberta e arestas de
 # relaxamento (verde = melhora o g conhecido, cinza = não melhora).
 let DijkstraOverlay = |graph, cur, cur_g, open, relaxes, col|
-    block {
-        . NodeTag(graph, cur, "g=" + num1(cur_g), darken(col), TAG_UR)
-        . Rings(graph, map(open, |e| e[0]), col)
-        for ([nb, w, cand, improved] in relaxes) {
-            . DashedEdge(graph, cur, nb, relax_color(improved), RELAX_W, [0.5, 0.5])
-            if (improved == 1) {
-                . NodeTag(graph, nb, "g=" + num1(cand), darken(relax_color(1)), TAG_UL)
+    [
+        Rings(graph, map(open, |e| e[0]), col),
+        block {
+            . NodeTag(graph, cur, "g=" + num1(cur_g), darken(col), TAG_UR)
+            for ([nb, w, cand, improved] in relaxes) {
+                . DashedEdge(graph, cur, nb, relax_color(improved), RELAX_W, [0.5, 0.5])
+                if (improved == 1) {
+                    . NodeTag(graph, nb, "g=" + num1(cand), darken(relax_color(1)), TAG_UL)
+                }
             }
         }
-    }
+    ]
 
 # A*: anéis + rótulos f na lista aberta, e uma guia tracejada (a heurística h)
 # do próximo nó a expandir até o objetivo.
 let AstarOverlay = |graph, pending, col| {
     let entries = unique_pending(pending)
-    return block {
-        for ([i, e] in enumerate(entries)) {
-            . CandidateRing(graph, e[0], col)
-            . NodeTag(graph, e[0], "f=" + num1(e[1]), darken(col), TAG_UR)
-            if (i == 0 and not (e[0] == graph["goal_id"])) {
-                . DashedEdge(graph, e[0], graph["goal_id"], col, RELAX_W, [0.5, 0.5])
+    return [
+        block {
+            for ([i, e] in enumerate(entries)) {
+                . CandidateRing(graph, e[0], col)
+            }
+        },
+        block {
+            for ([i, e] in enumerate(entries)) {
+                . NodeTag(graph, e[0], "f=" + num1(e[1]), darken(col), TAG_UR)
+                if (i == 0 and not (e[0] == graph["goal_id"])) {
+                    . DashedEdge(graph, e[0], graph["goal_id"], col, RELAX_W, [0.5, 0.5])
+                }
             }
         }
-    }
+    ]
 }
 
 # Best-First: anéis na lista aberta; rótulo h só nos filhos recém-gerados;
 # guia tracejada do próximo nó até o objetivo.
 let BestOverlay = |graph, open, cands, col|
-    block {
-        . Rings(graph, map(open, |e| e[0]), col)
-        for ([id, hv] in cands) {
-            . NodeTag(graph, id, "h=" + num1(hv), darken(col), TAG_UR)
-        }
-        if (len(open) > 0) {
-            if (not (open[0][0] == graph["goal_id"])) {
-                . DashedEdge(graph, open[0][0], graph["goal_id"], col, RELAX_W, [0.5, 0.5])
+    [
+        Rings(graph, map(open, |e| e[0]), col),
+        block {
+            for ([id, hv] in cands) {
+                . NodeTag(graph, id, "h=" + num1(hv), darken(col), TAG_UR)
+            }
+            if (len(open) > 0) {
+                if (not (open[0][0] == graph["goal_id"])) {
+                    . DashedEdge(graph, open[0][0], graph["goal_id"], col, RELAX_W, [0.5, 0.5])
+                }
             }
         }
-    }
+    ]
 
 # Hill Climbing: anéis e arestas candidatas a partir do nó atual.
 let HillOverlay = |graph, from, cands, col|
-    block {
-        . Rings(graph, map(cands, |c| c[0]), col)
-        for ([id, w] in cands) {
-            . DashedEdge(graph, from, id, col, HILL_W, [0.5, 0.5])
+    [
+        Rings(graph, map(cands, |c| c[0]), col),
+        block {
+            for ([id, w] in cands) {
+                . DashedEdge(graph, from, id, col, HILL_W, [0.5, 0.5])
+            }
         }
-    }
+    ]
 
 # BFS: anéis em cada nó da fila.
-let BFSOverlay = |graph, queue, col| Rings(graph, queue, col)
+let BFSOverlay = |graph, queue, col| [Rings(graph, queue, col), []]
 
 # DFS: anéis nas cabeças de ramo alternativas e marcas cinzas no ramo
 # abandonado por um retrocesso.
 let DFSOverlay = |graph, cur_path, heads, back, prev_path, col|
-    block {
-        . Rings(graph, unique_ids(heads), col)
-        if (back == 1) {
-            for (id in prev_path) {
-                if (lacks(cur_path, id)) {
-                    . AbandonMark(graph, id)
+    [
+        Rings(graph, unique_ids(heads), col),
+        block {
+            if (back == 1) {
+                for (id in prev_path) {
+                    if (lacks(cur_path, id)) {
+                        . AbandonMark(graph, id)
+                    }
                 }
             }
         }
-    }
+    ]
 
 
 # =============================================================================
@@ -573,7 +592,7 @@ let DFSOverlay = |graph, cur_path, heads, back, prev_path, col|
 # execução de cada algoritmo.
 # =============================================================================
 
-let RunSearch = |graph, &region, &labels, &trail, &cands, &pick, &panel, &path, &caption, spec| anim {
+let RunSearch = |graph, &region, &labels, &trail, &rings, &edges, &pick, &panel, &path, &caption, spec| anim {
     let expand = spec[0]
     let col = spec[1]
     let node_col = spec[2]
@@ -600,7 +619,9 @@ let RunSearch = |graph, &region, &labels, &trail, &cands, &pick, &panel, &path, 
             Set([&labels, &path, &caption])
         ]
 
-        cands = overlay_of(i)
+        let ov = overlay_of(i)
+        rings = ov[0]
+        edges = ov[1]
         panel = panel_of(i)
 
         let nxt = pick_of(i)
@@ -611,13 +632,21 @@ let RunSearch = |graph, &region, &labels, &trail, &cands, &pick, &panel, &path, 
             pick = PickMark(graph, nxt, col)
         }
 
-        play Fade(0.25 * anim_scale(graph), [&cands, &pick, &panel])
+        play [
+            Trans(0.25 * anim_scale(graph), [&rings]),
+            Fade(0.25 * anim_scale(graph), [&edges, &pick, &panel])
+        ]
         play Wait(step_delay(graph))
 
+        # Remove only the pick mark; candidate rings persist into the next
+        # step so that rings shared between steps do not blink.
         pick = []
-        cands = []
-        play Fade(0.25 * anim_scale(graph), [&cands, &pick])
+        play Fade(0.25 * anim_scale(graph), [&pick])
     }
+    # Remove candidate rings and dashed edges at the end of the search.
+    rings = []
+    edges = []
+    play Fade(0.25 * anim_scale(graph), [&rings, &edges])
 }
 
 let HighlightNode = |graph, id, fill_col, stroke_col, stroke_w, r_mult|
