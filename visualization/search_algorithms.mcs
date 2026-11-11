@@ -1,7 +1,7 @@
 # Visualização dos seis algoritmos de busca implementados
-# (Dijkstra, A*, Best-First, Escalada de Encosta, BFS, DFS) em uma
-# rede Pequeno Mundo gerada aleatoriamente. O script
-# `visualization-support/generate_data.pl` gera os dados
+# (Dijkstra, A*, Best-First, Escalada de Encosta, BFS, DFS)
+# em uma rede Pequeno Mundo gerada aleatoriamente. O script
+# `scripts/generate_monocurl_graph_data.pl` gera os dados
 # necessários do grafo e dos percursos realizados para
 # renderizar essa cena.
 #
@@ -19,11 +19,13 @@ import std.anim
 import std.scene
 
 # Status do Hill Climbing:
+# 
 #   graph15:  -
 #   graph20:  fica preso
 #   graph30:  chega no destino
 #   graph150: fica preso
-#   graph200: 
+#   graph200: -
+#   graph500: -
 import gen.graph15
 import gen.graph20
 import gen.graph30
@@ -38,13 +40,8 @@ import common
 background = WHITE
 
 
-# =============================================================================
-# GRAFO E GEOMETRIA
-# =============================================================================
+let graph = graph150
 
-let graph = graph20
-
-# Atalhos para as trilhas de execução que já vêm dentro do map do grafo.
 let dijkstra = graph["dijkstra"]
 let astar = graph["astar"]
 let best = graph["best"]
@@ -57,16 +54,7 @@ let dfs = graph["dfs"]
 # DADOS ESPECÍFICOS DESTA CENA
 # =============================================================================
 
-# Autores (placeholders).
-let AUTHORS = [
-    ["Lorem ipsum dolor sit amet consec", "12345678"],
-    ["Lorem ipsum dolor sit amet consectetu", "12345678"],
-    ["Lorem ipsum dolor sit ame", "12345678"],
-    ["Lorem ipsum dolor sit amet co", "12345678"],
-    ["Lorem ipsum dolor sit", "12345678"]
-]
-
-# Registro dos algoritmos: [nome, cor, ordem de expansão, caminho encontrado].
+# [nome, cor, ordem de expansão, caminho encontrado]
 let ALGOS = [
     ["Dijkstra", DIJK_COLOR, dijkstra["expand"], dijkstra["path"]],
     ["A*", ASTAR_COLOR, astar["expand"], astar["path"]],
@@ -76,7 +64,6 @@ let ALGOS = [
     ["DFS", DFS_COLOR, dfs["expand"], dfs["path"]]
 ]
 
-# Algoritmos specs
 let DIJK_SPEC = [
     dijkstra["expand"],
     DIJK_COLOR,
@@ -176,8 +163,13 @@ mesh title = []
 mesh subtitle = []
 mesh intro = []
 mesh base = []
+mesh base_nodes = []
 mesh endpoints = []
 mesh labels = []
+mesh knn_edges = []
+mesh rewired_edges = []
+mesh final_edges = []
+mesh highlight = []
 mesh region = []
 mesh trail = []
 mesh cands = []
@@ -192,93 +184,142 @@ mesh table = []
 # SLIDES
 # =============================================================================
 
-slide "01 Introdução"
-    title = to_side{UP, 0.5}
-            center{ORIGIN}
-            color{BLACK}
-            stroke{BLACK, 0.75}
-            Sans("Comparação de algoritmos de busca", FS_COVER_TITLE)
-
-    subtitle = Subtitle(title, ["Dijkstra, A*, Best-First, Hill Climbing, BFS, DFS"], BLACK, FS_COVER_SUB)
-    play Write(1.2, [&title, &subtitle])
-
-    let CoverBody = ||
-        [
-            center{[0, 0.65, 0]}
-            color{BLACK} 
-            Sans("em uma rede Pequeno Mundo", FS_COVER_BODY),
-            
-            center{[0, 0.3, 0]}
-            color{BLACK}
-            Typst("$(n=" + to_string(len(graph["nodes"])) + ", thick K=" + to_string(graph["k"]) + ", thick p=" + to_string(graph["p"]) + ")$", FS_COVER_BODY - 0.05)
-        ]
-
-    intro = CoverBody()
-    play Fade(0.8, [&intro])
-        
-    mesh authors = [    
-        center{[0, -1, 0]}
-        AuthorRows(AUTHORS, 2)
-    ]
-    
-    play Fade(0.6, [&authors])
-    play Wait(0.4)
-    
-    authors = []
-
-slide "02 O grafo"
+slide "A. O grafo"
     title = []
     subtitle = []
-    intro = []
+    base = []
+    base_nodes = []
+    endpoints = []
+    knn_edges = []
+    rewired_edges = []
+    final_edges = []
+    highlight = []
+    labels = []
+    region = []
+    trail = []
+    path = []
+    panel = []
+    caption = []
     play Set()
 
-    title = Title("Uma Rede Pequeno Mundo")
-    subtitle = Subtitle(title,
-                        ["cada nó se conecta aos seus " + to_string(graph["k"]) + " vizinhos mais próximos no plano"],
-                        DARK_GRAY, FS_SUBTITLE)
+    var centered_graph = graph
+    centered_graph["centered"] = 1
+
+    title = Title("Construção de uma Rede Pequeno Mundo (Small World)")
+    subtitle = Subtitle(title, ["N=" + to_string(len(graph["nodes"])) + ", K=" + to_string(graph["k"]) + ", p=" + to_string(graph["p"])], DARK_GRAY, FS_SUBTITLE)
     play Write(0.5, [&title, &subtitle])
 
-    base = [GraphEdges(graph), AllNodes(graph)]
-    play Fade(0.6, [&base])
+    # --- Fase 1: Vértices aleatórios ---
+    caption = Caption("Fase 1: " + to_string(len(graph["nodes"])) + " vértices posicionados aleatoriamente no plano")
+    play Fade(0.3, [&caption])
 
-    endpoints = [Endpoint(graph, graph["start_id"], START_COLOR), Endpoint(graph, graph["goal_id"], GOAL_COLOR)]
-    play Grow(0.4, [&endpoints])
+    base_nodes = AllNodes(centered_graph)
+    labels = NodeLabels(centered_graph, [])
+    play [
+        Grow(0.5, [&base_nodes]),
+        Fade(0.3, [&labels])
+    ]
+    play Wait(0.5)
 
+    # --- Fase 2: Grafo KNN ---
+    caption = Caption("Fase 2: Cada nó conecta aos seus K=" + to_string(graph["k"]) + " vizinhos mais próximos (KNN)")
+    play Fade(0.3, [&caption])
+
+    play AnimateEdgesWithNodes(centered_graph, &knn_edges, &highlight, centered_graph["knn_edges"], KNN_EDGE_COLOR, anim_edge_w(centered_graph), 0.03)
+    play Wait(0.5)
+
+    play Fade(0.3, [&knn_edges])
+
+    # --- Fase 3: Reconexão (Rewiring) ---
+    caption = Caption("Fase 3: Reconexão com probabilidade p=" + to_string(graph["p"]) + " (arestas vermelhas são reconectadas)")
+    play Fade(0.3, [&caption])
+
+    play AnimateRewiredEdges(centered_graph, &rewired_edges, &highlight, centered_graph["rewired_edges"], 0.04)
+    play Wait(0.5)
+
+    # --- Fase 4: Grafo final ---
+    caption = Caption("Rede Pequeno Mundo final: estrutura local (KNN) + atalhos globais (rewiring)")
+    play Fade(0.3, [&caption])
+
+    play Wait(0.5)
+
+    play Wait(1.0)
+
+
+    caption = Footer("A rede Pequeno Mundo combina alta clusterização local com caminho médio curto")
+    play Write(0.5, [&caption])
+    play Wait(1.0)
+
+    # --- Transição para o grafo regular (cinza), à esquerda ---
+    play Wait(0.5)
+
+    base = []
+    # Valores iniciais (centralizados).
+    base_nodes = AllNodes(centered_graph)
+    labels = NodeLabels(centered_graph, [])
+    knn_edges = stroke{KNN_EDGE_COLOR, anim_edge_w(centered_graph)} z_index{Z_EDGE} EdgeSet(centered_graph, centered_graph["knn_edges"])
+    rewired_edges = RewiredEdges(centered_graph)
+    endpoints = [
+        z_index{Z_ENDPOINT} fill{node_fill(centered_graph)} stroke{EDGE_COLOR, NODE_STROKE} NodeCircle(centered_graph, graph["start_id"], node_radius(centered_graph)),
+        z_index{Z_ENDPOINT} fill{node_fill(centered_graph)} stroke{EDGE_COLOR, NODE_STROKE} NodeCircle(centered_graph, graph["goal_id"], node_radius(centered_graph))
+    ]
+    highlight = []
+    play Set([&base, &highlight, &knn_edges, &rewired_edges, &endpoints])
+
+    # Valores finais (à esquerda): as arestas coloridas movem-se e tornam-se cinzas,
+    # e os nós de origem/destino transitam para o estilo de endpoint.
+    base_nodes = AllNodes(graph)
     labels = NodeLabels(graph, [[graph["start_id"], START_COLOR], [graph["goal_id"], GOAL_COLOR]])
+    knn_edges = stroke{EDGE_COLOR, EDGE_W} z_index{Z_EDGE} EdgeSet(graph, graph["knn_edges"])
+    rewired_edges = stroke{EDGE_COLOR, 1.6} z_index{Z_TREE} EdgeSet(graph, graph["rewired_edges"])
+    endpoints = [Endpoint(graph, graph["start_id"], START_COLOR), Endpoint(graph, graph["goal_id"], GOAL_COLOR)]
+
+    # Move o grafo inteiro (nós, arestas coloridas e rótulos) para a esquerda;
+    # a cor das arestas morfa gradualmente para cinza, e os endpoints transitam.
+    play Trans(0.8, [&base_nodes, &knn_edges, &rewired_edges, &labels, &endpoints], 0, ease_in_out)
+    play Wait(0.2)
+
+    # Ao final: arestas cinzas reais surgem e as coloridas desaparecem (sem animação).
+    final_edges = GraphEdges(graph)
+    knn_edges = []
+    rewired_edges = []
     panel = GraphInfoPanel(graph)
-    play Fade(0.5, [&labels, &panel])
-    
+
+    play Set([&final_edges, &panel, &knn_edges, &rewired_edges])
+
     mesh start_node_caption_key =
         to_corner{DOWN + LEFT, 0.2}
         fill{START_COLOR} stroke{darken(START_COLOR), NODE_STROKE} Circle(0.04)
-    
+
     mesh start_node_caption_label =
         next_to{start_node_caption_key} Sans("origem: nó " + to_string(graph["start_id"]), FS_CAPTION)
-    
+
     mesh goal_node_caption_key =
         next_to{start_node_caption_label, 1r, 1}
         fill{GOAL_COLOR} stroke{darken(GOAL_COLOR), NODE_STROKE} Circle(0.04)
-    
-    mesh goal_node_caption_label = 
+
+    mesh goal_node_caption_label =
         next_to{goal_node_caption_key} Sans("destino: nó " + to_string(graph["goal_id"]), FS_CAPTION)
-    
-    caption = 
+
+    caption =
         [&start_node_caption_key, &start_node_caption_label, &goal_node_caption_key, &goal_node_caption_label]
-    
+
     play [
         Write(0.6, [&caption])
     ]
-    
+
     start_node_caption_key = []
     start_node_caption_label = []
     goal_node_caption_key = []
     goal_node_caption_label = []
 
+    play Wait(1.0)
+
 
 # -----------------------------------------------------------------------------
 # Slides dos algoritmos
 # -----------------------------------------------------------------------------
-slide "03 Dijkstra"
+slide "B. Dijkstra"
     title = []
     subtitle = []
     region = []
@@ -307,7 +348,7 @@ slide "03 Dijkstra"
     panel = SummaryPanel(graph, dijkstra["expand"], dijkstra["path"], "expande o nó com o menor valor de g", DIJK_COLOR)
     play [Set([&caption]), Fade(0.5, [&panel])]
 
-slide "04 A-star"
+slide "C. A-star"
     title = []
     subtitle = []
     region = []
@@ -339,7 +380,7 @@ slide "04 A-star"
     panel = SummaryPanel(graph, astar["expand"], astar["path"], "expande o menor f = g + h", ASTAR_COLOR)
     play [Set([&caption]), Fade(0.5, [&panel])]
 
-slide "05 Best-First"
+slide "D. Best-First"
     title = []
     subtitle = []
     region = []
@@ -371,7 +412,7 @@ slide "05 Best-First"
     panel = SummaryPanel(graph, best["expand"], best["path"], "expande o menor h, ignora o custo", BEST_COLOR)
     play [Set([&caption]), Fade(0.5, [&panel])]
 
-slide "06 Hill Climbing"
+slide "E. Hill Climbing"
     title = []
     subtitle = []
     region = []
@@ -405,7 +446,7 @@ slide "06 Hill Climbing"
     panel = SummaryPanel(graph, hill["expand"], hill["path"], hill_verdict, HILL_COLOR)
     play [Set([&caption]), Fade(0.5, [&panel])]
 
-slide "07 BFS"
+slide "F. BFS"
     title = []
     subtitle = []
     region = []
@@ -434,7 +475,7 @@ slide "07 BFS"
     panel = SummaryPanel(graph, bfs["expand"], bfs["path"], "caminho de menos saltos", BFS_COLOR)
     play [Set([&caption]), Fade(0.5, [&panel])]
 
-slide "08 DFS"
+slide "G. DFS"
     title = []
     subtitle = []
     region = []
@@ -467,18 +508,23 @@ slide "08 DFS"
 # -----------------------------------------------------------------------------
 # Comparação
 # -----------------------------------------------------------------------------
-slide "09 Comparação"
+slide "H. Comparação"
     title = []
     subtitle = []
     base = []
+    base_nodes = []
     endpoints = []
     labels = []
+    knn_edges = []
+    rewired_edges = []
+    final_edges = []
+    highlight = []
     region = []
     trail = []
     path = []
     panel = []
     caption = []
-    play Fade(0.5, [&title, &subtitle, &base, &endpoints, &labels, &region, &trail, &path, &panel, &caption])
+    play Fade(0.5, [&title, &subtitle, &base, &base_nodes, &endpoints, &labels, &region, &trail, &path, &panel, &caption, &knn_edges, &rewired_edges, &final_edges, &highlight])
 
     title = Title("Como cada algoritmo buscou na rede")
     subtitle = Subtitle(title, ["verde = melhor valor da coluna"], DARK_GRAY, FS_SUBTITLE)
