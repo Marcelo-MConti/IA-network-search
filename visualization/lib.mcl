@@ -1,0 +1,156 @@
+# Biblioteca de funções auxiliares genéricas para Monocurl.
+#
+# Este arquivo não conhece nenhum grafo, cena ou constante do projeto: tudo que
+# depende de dados específicos é recebido como parâmetro (ou instanciado em
+# common.mcl). Assim ele pode ser reutilizado por várias cenas.
+
+import std.util
+import std.math
+import std.color
+import std.mesh
+import std.anim
+import std.scene
+
+
+# =============================================================================
+# FUNÇÕES AUXILIARES PURAS
+# =============================================================================
+
+# Escurece uma cor.
+let darken = |c| rgb(c[0] * 0.66, c[1] * 0.66, c[2] * 0.66)
+
+# Cor de texto (preto/branco) com bom contraste sobre o preenchimento `c`.
+let ink_on = |c| {
+    if (0.299 * c[0] + 0.587 * c[1] + 0.114 * c[2] > 0.62) { return BLACK }
+    return WHITE
+}
+
+# Cor da camada BFS: camadas posteriores são um pouco mais claras.
+let bfs_layer_color = |d| rgb(0.03 + 0.07 * d, 0.16 + 0.15 * d, 0.55 + 0.03 * d)
+
+# Verifica se uma lista possui / NÃO possui um determinado elemento.
+let has = |list, x| len(filter(list, |v| v == x)) > 0
+let lacks = |list, x| len(filter(list, |v| v == x)) == 0
+
+# Primeiro elemento de uma lista, ou -1 se ela estiver vazia.
+let head_or_none = |l| {
+    if (len(l) == 0) { return -1 }
+    return l[0]
+}
+
+# Remove duplicatas mantendo a primeira ocorrência de cada chave `key(item)`.
+let dedupe = |items, key| {
+    let rec = |self, rest, seen, acc| {
+        if (len(rest) == 0) { return acc }
+        let k = key(rest[0])
+        if (has(seen, k)) {
+            return self(self, drop(rest, 1), seen, acc)
+        }
+        return self(self, drop(rest, 1), seen .. k, acc .. rest[0])
+    }
+    return rec(rec, items, [], [])
+}
+
+# Lista aberta [[id, f], ...] sem nós repetidos (mantém o menor f, que vem primeiro).
+let unique_pending = |pending| dedupe(pending, |e| e[0])
+let unique_len = |pending| len(unique_pending(pending))
+let unique_ids = |ids| dedupe(ids, identity)
+
+# Pares consecutivos de uma sequência de nós: [a, b, c] -> [[a, b], [b, c]].
+let Chain = |ids| zip(take(ids, len(ids) - 1), drop(ids, 1))
+
+# Formata um número com uma casa decimal.
+let num1 = |x| to_string(round(x * 10) / 10)
+
+# Renderiza uma lista de IDs de nós como "0 → 2 → 6".
+let path_str = |p| {
+    let rec = |self, rest| {
+        if (len(rest) == 0) { return "" }
+        if (len(rest) == 1) { return to_string(rest[0]) }
+        return to_string(rest[0]) + " → " + self(self, drop(rest, 1))
+    }
+    return rec(rec, p)
+}
+
+# Mantém caminhos longos legíveis: mostra a raiz e os últimos quatro nós.
+let short_path = |p| {
+    if (len(p) <= 8) { return path_str(p) }
+    let head = take(p, 3)
+    let tail = take(drop(p, len(p) - 4), 4)
+    return path_str(head) + " … " + path_str(tail)
+}
+
+
+# =============================================================================
+# FÁBRICAS DE TEXTO E LAYOUT
+#
+# As constantes visuais (fontes, tamanhos, margens, z-index) são injetadas por
+# common.mcl, que instancia estas fábricas com os valores do projeto.
+# =============================================================================
+
+# Espaçador invisível para usar dentro de Stack/XStack.
+let Gap = |size| fill{CLEAR} stroke{CLEAR} Rect(size)
+
+# Texto em uma fonte configurável.
+let make_Sans = |font| |text, sc| Text(text, sc, font: font)
+
+# Fórmula (Typst) em linha, com ajuste vertical configurável.
+let make_MathText = |drop| |s, sc| shift{[0, drop, 0]} Typst("$" + s + "$", sc)
+
+# Reduz uma malha (só se necessário) para que sua largura não passe de `maxw`.
+let fit_width = |m, maxw| scale{min(1, maxw / max(mesh_width(m), 0.001))} m
+
+# Texto posicionado por âncora: align = "l" (borda esquerda em x),
+# "r" (borda direita em x) ou "c" (centro em x). `y` é o centro vertical.
+let make_TextAt = |z_text, sans| |str, sc, c, x, y, align, maxw| {
+    if (len(str) == 0) { return [] }
+    let t = fit_width(sans(str, sc), maxw)
+    var dx = x - mesh_center(t)[0]
+    if (align == "l") { dx = x - mesh_left(t)[0] }
+    if (align == "r") { dx = x - mesh_right(t)[0] }
+    return z_index{z_text} color{c} shift{[dx, y - mesh_center(t)[1], 0]} t
+}
+
+# Intercala `gap` entre os itens de uma lista.
+let spaced = |items, gap| {
+    let flat = flatten(map(items, |m| [m, gap]))
+    return take(flat, len(flat) - 1)
+}
+
+# Empilha verticalmente (primeiro item em cima).
+let VStack = |items| Stack(items, DOWN)
+
+# Título no topo, centralizado.
+let make_Title = |fs_title, frame_w, sans| |str| {
+    let m = fit_width(sans(str, fs_title), frame_w - 0.6)
+    return to_side{UP, 0.2} color{BLACK} center{ORIGIN} m
+}
+
+# Aceita texto simples ou meshes (ex.: MathText) em `parts`.
+let make_piece = |sans| |p, sc| {
+    if (is_string(p)) { return sans(p, sc) }
+    return p
+}
+
+# Subtítulo logo abaixo de `anchor`, composto por pedaços lado a lado.
+let make_Subtitle = |frame_w, piece| |anchor, parts, col, sc| {
+    let m = fit_width(XStack(map(parts, |p| piece(p, sc))), frame_w - 0.6)
+    return next_to{anchor, DOWN, 0.12} color{col} center{ORIGIN} m
+}
+
+# Legenda no canto inferior esquerdo (alinhada à esquerda, nunca invade o grafo).
+let make_Caption = |fs_caption, frame_w, sans| |str|
+    to_corner{DOWN + LEFT, 0.2}
+    color{BLACK}
+    center{ORIGIN}
+    fit_width(sans(str, fs_caption), frame_w - 0.6)
+
+# Legenda do passo atual dos algoritmos.
+let make_StepCaption = |caption| |i, rest| caption("Passo " + to_string(i + 1) + "   •   " + rest)
+
+# Nota centralizada no rodapé.
+let make_Footer = |fs_caption, frame_w, margin, sans| |str|
+    to_side{DOWN, 0.2}
+    color{BLACK}
+    center{ORIGIN}
+    fit_width(sans(str, fs_caption), frame_w - 2 * margin)

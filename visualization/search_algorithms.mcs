@@ -1,0 +1,493 @@
+# Visualização dos seis algoritmos de busca implementados
+# (Dijkstra, A*, Best-First, Escalada de Encosta, BFS, DFS) em uma
+# rede Pequeno Mundo gerada aleatoriamente. O script
+# `visualization-support/generate_data.pl` gera os dados
+# necessários do grafo e dos percursos realizados para
+# renderizar essa cena.
+#
+# Para rodar o gerador:
+#
+#     swipl -q -f scripts/generate_monocurl_graph_data.pl \
+#         -g "run(n, K, p, seed, start, goal, 'gen/graph20.mcl')" -t halt
+
+
+import std.util
+import std.math
+import std.color
+import std.mesh
+import std.anim
+import std.scene
+
+# Status do Hill Climbing:
+#   graph15:  -
+#   graph20:  fica preso
+#   graph30:  chega no destino
+#   graph150: fica preso
+#   graph200: 
+import gen.graph15
+import gen.graph20
+import gen.graph30
+import gen.graph150
+import gen.graph200
+import gen.graph500
+
+import lib
+import common
+
+
+background = WHITE
+
+
+# =============================================================================
+# GRAFO E GEOMETRIA
+# =============================================================================
+
+let graph = graph20
+
+# Atalhos para as trilhas de execução que já vêm dentro do map do grafo.
+let dijkstra = graph["dijkstra"]
+let astar = graph["astar"]
+let best = graph["best"]
+let hill = graph["hill"]
+let bfs = graph["bfs"]
+let dfs = graph["dfs"]
+
+
+# =============================================================================
+# DADOS ESPECÍFICOS DESTA CENA
+# =============================================================================
+
+# Autores (placeholders).
+let AUTHORS = [
+    ["Lorem ipsum dolor sit amet consec", "12345678"],
+    ["Lorem ipsum dolor sit amet consectetu", "12345678"],
+    ["Lorem ipsum dolor sit ame", "12345678"],
+    ["Lorem ipsum dolor sit amet co", "12345678"],
+    ["Lorem ipsum dolor sit", "12345678"]
+]
+
+# Registro dos algoritmos: [nome, cor, ordem de expansão, caminho encontrado].
+let ALGOS = [
+    ["Dijkstra", DIJK_COLOR, dijkstra["expand"], dijkstra["path"]],
+    ["A*", ASTAR_COLOR, astar["expand"], astar["path"]],
+    ["Best-First", BEST_COLOR, best["expand"], best["path"]],
+    ["Hill Climbing", HILL_COLOR, hill["expand"], hill["path"]],
+    ["BFS", BFS_COLOR, bfs["expand"], bfs["path"]],
+    ["DFS", DFS_COLOR, dfs["expand"], dfs["path"]]
+]
+
+# Algoritmos specs
+let DIJK_SPEC = [
+    dijkstra["expand"],
+    DIJK_COLOR,
+    |i| DIJK_COLOR,
+    |i| filter(take(dijkstra["pred"], i + 1), |e| len(e) > 0),
+    |i| [],
+    |i| "expandir " + to_string(dijkstra["expand"][i]) + " (g=" + num1(dijkstra["g"][i]) + ")   •   relaxar " + to_string(len(dijkstra["relax"][i])),
+    |i| DijkstraOverlay(graph, dijkstra["expand"][i], dijkstra["g"][i], dijkstra["open"][i], dijkstra["relax"][i], DIJK_COLOR),
+    |i| ScoredPanel(dijkstra["open"][i], "g", "Nós a serem visitados", "menor g primeiro", "próximo", DIJK_COLOR),
+    |i| dijkstra["pick"][i]
+]
+
+let ASTAR_SPEC = [
+    astar["expand"],
+    ASTAR_COLOR,
+    |i| ASTAR_COLOR,
+    |i| Chain(take(astar["expand"], i + 1)),
+    |i| [],
+    |i| "expandir " + to_string(astar["expand"][i]) + "   •   pendentes: " + to_string(unique_len(astar["pending"][i])),
+    |i| AstarOverlay(graph, astar["pending"][i], ASTAR_COLOR),
+    |i| AstarPanel(graph, astar["pending"][i], ASTAR_COLOR),
+    |i| head_or_none(map(astar["pending"][i], |e| e[0]))
+]
+
+let BEST_SPEC = [
+    best["expand"],
+    BEST_COLOR,
+    |i| BEST_COLOR,
+    |i| filter(take(best["pred"], i + 1), |e| len(e) > 0),
+    |i| [],
+    |i| "expandir " + to_string(best["steps"][i][0]) + "   •   novos: " + to_string(len(best["steps"][i][1])) + "   •   pendentes: " + to_string(len(best["pending"][i])),
+    |i| BestOverlay(graph, best["pending"][i], best["steps"][i][1], BEST_COLOR),
+    |i| ScoredPanel(best["pending"][i], "h", "Nós a serem visitados", "menor h primeiro", "próximo", BEST_COLOR),
+    |i| best["steps"][i][2]
+]
+
+let HILL_SPEC = [
+    hill["expand"],
+    HILL_COLOR,
+    |i| HILL_COLOR,
+    |i| Chain(take(hill["expand"], i + 1)),
+    |i| [],
+    |i| "nó " + to_string(hill["steps"][i][0]) + "   •   candidatos: " + to_string(len(hill["steps"][i][1])),
+    |i| HillOverlay(graph, hill["steps"][i][0], hill["steps"][i][1], HILL_COLOR),
+    |i| ScoredPanel(sort(hill["steps"][i][1], |c| c[1]), "w", "Candidatos", "menor peso de aresta", "mín", HILL_COLOR),
+    |i| hill["steps"][i][2]
+]
+
+let BFS_SPEC = [
+    bfs["expand"],
+    BFS_COLOR,
+    |i| bfs_layer_color(bfs["steps"][i][3]),
+    |i| flatten(map(take(bfs["steps"], i + 1), |s| s[2])),
+    |i| [],
+    |i| "desenfileirar " + to_string(bfs["steps"][i][0]) + " (profundidade " + to_string(bfs["steps"][i][3]) + ")   •   novos: " + to_string(len(bfs["steps"][i][2])),
+    |i| BFSOverlay(graph, bfs["steps"][i][1], BFS_COLOR),
+    |i| ListPanel(bfs["steps"][i][1], "Fila (FIFO)", "frente → trás", [], "próximo", BFS_COLOR),
+    |i| head_or_none(bfs["steps"][i][1])
+]
+
+let dfs_path = |i| {
+    if (len(dfs["steps"][i][1]) > 1) { return PathMesh(graph, dfs["steps"][i][1], DFS_COLOR) }
+    return []
+}
+
+let dfs_caption = |i| {
+    var s = "visitar " + to_string(dfs["steps"][i][0]) + " (profundidade " + to_string(dfs["steps"][i][4]) + ")"
+    if (dfs["steps"][i][5] == 1) { s = s + "   •   retroceder" }
+    return s
+}
+
+let dfs_prev_path = |i| {
+    if (i > 0) { return dfs["steps"][i - 1][1] }
+    return []
+}
+
+let DFS_SPEC = [
+    dfs["expand"],
+    DFS_COLOR,
+    |i| DFS_COLOR,
+    |i| flatten(map(take(dfs["steps"], i + 1), |s| s[3])),
+    |i| dfs_path(i),
+    |i| dfs_caption(i),
+    |i| DFSOverlay(graph, dfs["steps"][i][1], dfs["steps"][i][2], dfs["steps"][i][5], dfs_prev_path(i), DFS_COLOR),
+    |i| ListPanel(unique_ids(dfs["steps"][i][2]), "Pilha (LIFO)", "topo primeiro",
+                  ["Profundidade: " + to_string(dfs["steps"][i][4]), "Ramo: " + short_path(dfs["steps"][i][1])],
+                  "próximo", DFS_COLOR),
+    |i| dfs["steps"][i][0]
+]
+
+
+# =============================================================================
+# MESH LEADERS
+# =============================================================================
+
+mesh title = []
+mesh subtitle = []
+mesh intro = []
+mesh base = []
+mesh endpoints = []
+mesh labels = []
+mesh region = []
+mesh trail = []
+mesh cands = []
+mesh pick = []
+mesh path = []
+mesh panel = []
+mesh caption = []
+mesh table = []
+
+
+# =============================================================================
+# SLIDES
+# =============================================================================
+
+slide "01 Introdução"
+    title = to_side{UP, 0.5}
+            center{ORIGIN}
+            color{BLACK}
+            stroke{BLACK, 0.75}
+            Sans("Comparação de algoritmos de busca", FS_COVER_TITLE)
+
+    subtitle = Subtitle(title, ["Dijkstra, A*, Best-First, Hill Climbing, BFS, DFS"], BLACK, FS_COVER_SUB)
+    play Write(1.2, [&title, &subtitle])
+
+    let CoverBody = ||
+        [
+            center{[0, 0.65, 0]}
+            color{BLACK} 
+            Sans("em uma rede Pequeno Mundo", FS_COVER_BODY),
+            
+            center{[0, 0.3, 0]}
+            color{BLACK}
+            Typst("$(n=" + to_string(len(graph["nodes"])) + ", thick K=" + to_string(graph["k"]) + ", thick p=" + to_string(graph["p"]) + ")$", FS_COVER_BODY - 0.05)
+        ]
+
+    intro = CoverBody()
+    play Fade(0.8, [&intro])
+        
+    mesh authors = [    
+        center{[0, -1, 0]}
+        AuthorRows(AUTHORS, 2)
+    ]
+    
+    play Fade(0.6, [&authors])
+    play Wait(0.4)
+    
+    authors = []
+
+slide "02 O grafo"
+    title = []
+    subtitle = []
+    intro = []
+    play Set()
+
+    title = Title("Uma Rede Pequeno Mundo")
+    subtitle = Subtitle(title,
+                        ["cada nó se conecta aos seus " + to_string(graph["k"]) + " vizinhos mais próximos no plano"],
+                        DARK_GRAY, FS_SUBTITLE)
+    play Write(0.5, [&title, &subtitle])
+
+    base = [GraphEdges(graph), AllNodes(graph)]
+    play Fade(0.6, [&base])
+
+    endpoints = [Endpoint(graph, graph["start_id"], START_COLOR), Endpoint(graph, graph["goal_id"], GOAL_COLOR)]
+    play Grow(0.4, [&endpoints])
+
+    labels = NodeLabels(graph, [[graph["start_id"], START_COLOR], [graph["goal_id"], GOAL_COLOR]])
+    panel = GraphInfoPanel(graph)
+    play Fade(0.5, [&labels, &panel])
+    
+    mesh start_node_caption_key =
+        to_corner{DOWN + LEFT, 0.2}
+        fill{START_COLOR} stroke{darken(START_COLOR), NODE_STROKE} Circle(0.04)
+    
+    mesh start_node_caption_label =
+        next_to{start_node_caption_key} Sans("origem: nó " + to_string(graph["start_id"]), FS_CAPTION)
+    
+    mesh goal_node_caption_key =
+        next_to{start_node_caption_label, 1r, 1}
+        fill{GOAL_COLOR} stroke{darken(GOAL_COLOR), NODE_STROKE} Circle(0.04)
+    
+    mesh goal_node_caption_label = 
+        next_to{goal_node_caption_key} Sans("destino: nó " + to_string(graph["goal_id"]), FS_CAPTION)
+    
+    caption = 
+        [&start_node_caption_key, &start_node_caption_label, &goal_node_caption_key, &goal_node_caption_label]
+    
+    play [
+        Write(0.6, [&caption])
+    ]
+    
+    start_node_caption_key = []
+    start_node_caption_label = []
+    goal_node_caption_key = []
+    goal_node_caption_label = []
+
+
+# -----------------------------------------------------------------------------
+# Slides dos algoritmos
+# -----------------------------------------------------------------------------
+slide "03 Dijkstra"
+    title = []
+    subtitle = []
+    region = []
+    trail = []
+    cands = []
+    pick = []
+    path = []
+    panel = []
+    caption = []
+    labels = NodeLabels(graph, [[graph["start_id"], START_COLOR], [graph["goal_id"], GOAL_COLOR]])
+    play Set()
+
+    title = Title("Dijkstra:  custo uniforme, expande por distância")
+    subtitle = Subtitle(title, ["expande todos os subcaminhos, minimizando", MathText("g", FS_SUBTITLE), "= distância total até o nó"], darken(DIJK_COLOR), FS_SUBTITLE)
+    play Write(0.5, [&title, &subtitle])
+
+    caption = Caption("Passo 0   •   início no nó " + to_string(graph["start_id"]))
+    play Fade(0.3, [&caption])
+
+    play RunSearch(graph, &region, &labels, &trail, &cands, &pick, &panel, &path, &caption, DIJK_SPEC)
+
+    path = PathMesh(graph, dijkstra["path"], DIJK_COLOR)
+    play Write(0.8, [&path])
+
+    caption = Caption("Caminho: " + path_str(dijkstra["path"]))
+    panel = SummaryPanel(graph, dijkstra["expand"], dijkstra["path"], "expande o nó com o menor valor de g", DIJK_COLOR)
+    play [Set([&caption]), Fade(0.5, [&panel])]
+
+slide "04 A-star"
+    title = []
+    subtitle = []
+    region = []
+    trail = []
+    cands = []
+    pick = []
+    path = []
+    panel = []
+    caption = []
+    labels = NodeLabels(graph, [[graph["start_id"], START_COLOR], [graph["goal_id"], GOAL_COLOR]])
+    play Set()
+
+    title = Title("A*:  guiado por heurística")
+    subtitle = Subtitle(title,
+                        ["usa", MathText("f = g + h", FS_SUBTITLE),
+                         "para ordenar os nós, com", MathText("h", FS_SUBTITLE), "= distância em linha reta até o destino"],
+                        darken(ASTAR_COLOR), FS_SUBTITLE)
+    play Write(0.5, [&title, &subtitle])
+
+    caption = Caption("Passo 0   •   início no nó " + to_string(graph["start_id"]))
+    play Fade(0.3, [&caption])
+
+    play RunSearch(graph, &region, &labels, &trail, &cands, &pick, &panel, &path, &caption, ASTAR_SPEC)
+
+    path = PathMesh(graph, astar["path"], ASTAR_COLOR)
+    play Write(0.8, [&path])
+
+    caption = Caption("Caminho: " + path_str(astar["path"]))
+    panel = SummaryPanel(graph, astar["expand"], astar["path"], "expande o menor f = g + h", ASTAR_COLOR)
+    play [Set([&caption]), Fade(0.5, [&panel])]
+
+slide "05 Best-First"
+    title = []
+    subtitle = []
+    region = []
+    trail = []
+    cands = []
+    pick = []
+    path = []
+    panel = []
+    caption = []
+    labels = NodeLabels(graph, [[graph["start_id"], START_COLOR], [graph["goal_id"], GOAL_COLOR]])
+    play Set()
+
+    title = Title("Best-First: escolhe o nó com melhor valor de heurística, de forma gulosa")
+    subtitle = Subtitle(title,
+                        ["ordena os nós usando apenas", MathText("h", FS_SUBTITLE),
+                         "= distância em linha reta até o objetivo, ignorando o custo percorrido"],
+                        darken(BEST_COLOR), FS_SUBTITLE)
+    play Write(0.5, [&title, &subtitle])
+
+    caption = Caption("Passo 0   •   início no nó " + to_string(graph["start_id"]))
+    play Fade(0.3, [&caption])
+
+    play RunSearch(graph, &region, &labels, &trail, &cands, &pick, &panel, &path, &caption, BEST_SPEC)
+
+    path = PathMesh(graph, best["path"], BEST_COLOR)
+    play Write(0.8, [&path])
+
+    caption = Caption("Caminho: " + path_str(best["path"]))
+    panel = SummaryPanel(graph, best["expand"], best["path"], "expande o menor h, ignora o custo", BEST_COLOR)
+    play [Set([&caption]), Fade(0.5, [&panel])]
+
+slide "06 Hill Climbing"
+    title = []
+    subtitle = []
+    region = []
+    trail = []
+    cands = []
+    pick = []
+    path = []
+    panel = []
+    caption = []
+    labels = NodeLabels(graph, [[graph["start_id"], START_COLOR], [graph["goal_id"], GOAL_COLOR]])
+    play Set()
+
+    title = Title("Hill Climbing: guloso, sem backtracking")
+    subtitle = Subtitle(title, ["vai para o vizinho não visitado mais próximo do nó atual "], darken(HILL_COLOR), FS_SUBTITLE)
+    play Write(0.5, [&title, &subtitle])
+
+    caption = Caption("Passo 0   •   início no nó " + to_string(graph["start_id"]))
+    play Fade(0.3, [&caption])
+
+    play RunSearch(graph, &region, &labels, &trail, &cands, &pick, &panel, &path, &caption, HILL_SPEC)
+
+    path = PathMesh(graph, hill["path"], HILL_COLOR)
+    play Write(0.8, [&path])
+
+    var hill_verdict = "usa a aresta mais barata"
+    if (hill["status"] == "stuck") {
+        hill_verdict = "preso em um máximo local"
+    }
+    
+    caption = Caption("Caminho: " + path_str(hill["path"]))
+    panel = SummaryPanel(graph, hill["expand"], hill["path"], hill_verdict, HILL_COLOR)
+    play [Set([&caption]), Fade(0.5, [&panel])]
+
+slide "07 BFS"
+    title = []
+    subtitle = []
+    region = []
+    trail = []
+    cands = []
+    pick = []
+    path = []
+    panel = []
+    caption = []
+    labels = NodeLabels(graph, [[graph["start_id"], START_COLOR], [graph["goal_id"], GOAL_COLOR]])
+    play Set()
+
+    title = Title("Busca em Largura:  explora camada por camada")
+    subtitle = Subtitle(title, ["fila (FIFO) expande todos os nós na camada", MathText("n", FS_SUBTITLE), "antes de", MathText("n+1", FS_SUBTITLE), " •  cor mais clara = camada mais profunda"], darken(BFS_COLOR), FS_SUBTITLE)
+    play Write(0.5, [&title, &subtitle])
+
+    caption = Caption("Passo 0   •   início no nó " + to_string(graph["start_id"]))
+    play Fade(0.3, [&caption])
+
+    play RunSearch(graph, &region, &labels, &trail, &cands, &pick, &panel, &path, &caption, BFS_SPEC)
+
+    path = PathMesh(graph, bfs["path"], BFS_COLOR)
+    play Write(0.8, [&path])
+
+    caption = Caption("Caminho: " + path_str(bfs["path"]))
+    panel = SummaryPanel(graph, bfs["expand"], bfs["path"], "caminho de menos saltos", BFS_COLOR)
+    play [Set([&caption]), Fade(0.5, [&panel])]
+
+slide "08 DFS"
+    title = []
+    subtitle = []
+    region = []
+    trail = []
+    cands = []
+    pick = []
+    path = []
+    panel = []
+    caption = []
+    labels = NodeLabels(graph, [[graph["start_id"], START_COLOR], [graph["goal_id"], GOAL_COLOR]])
+    play Set()
+
+    title = Title("Busca em Profundidade:  explora cada caminho até o fim")
+    subtitle = Subtitle(title, ["pilha (LIFO), escolhe o vizinho mais profundo não visitado"], darken(DFS_COLOR), FS_SUBTITLE)
+    play Write(0.5, [&title, &subtitle])
+
+    caption = Caption("Passo 0   •   início no nó " + to_string(graph["start_id"]))
+    play Fade(0.3, [&caption])
+
+    play RunSearch(graph, &region, &labels, &trail, &cands, &pick, &panel, &path, &caption, DFS_SPEC)
+
+    path = PathMesh(graph, dfs["path"], DFS_COLOR)
+    play Write(0.8, [&path])
+
+    caption = Caption("Caminho: " + short_path(dfs["path"]))
+    panel = SummaryPanel(graph, dfs["expand"], dfs["path"], "caminho longo, não o mais curto", DFS_COLOR)
+    play [Set([&caption]), Fade(0.5, [&panel])]
+
+
+# -----------------------------------------------------------------------------
+# Comparação
+# -----------------------------------------------------------------------------
+slide "09 Comparação"
+    title = []
+    subtitle = []
+    base = []
+    endpoints = []
+    labels = []
+    region = []
+    trail = []
+    path = []
+    panel = []
+    caption = []
+    play Fade(0.5, [&title, &subtitle, &base, &endpoints, &labels, &region, &trail, &path, &panel, &caption])
+
+    title = Title("Como cada algoritmo buscou na rede")
+    subtitle = Subtitle(title, ["verde = melhor valor da coluna"], DARK_GRAY, FS_SUBTITLE)
+    play Write(0.5, [&title, &subtitle])
+
+    table = ComparisonTable(graph, ALGOS)
+    play Fade(0.5, [&table])
+
+    caption = Footer("O BFS chega no destino com o menor número de passos, enquanto o A* explora muito menos nós que o Dijkstra.")
+    play Write(0.6, [&caption])
+    
+    print ["dijkstra" -> len(dijkstra["expand"]), "astar" -> len(astar["expand"]), "bfs" -> len(bfs["expand"]), "dfs" -> len(dfs["expand"]), "hill" -> len(hill["expand"])]

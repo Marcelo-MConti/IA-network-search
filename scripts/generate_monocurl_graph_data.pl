@@ -11,11 +11,11 @@
 % explores the graph.
 %
 % Usage:
-%   swipl -q -f visualization-support/generate_data.pl \
+%   swipl -q -f scripts/generate_monocurl_graph_data.pl \
 %       -g "run(N, K, P, Seed, Vi, Vf, OutFile)" -t halt
 %
 % Example (matches the params used in visualization.mcs):
-%   swipl -q -f visualization-support/generate_data.pl \
+%   swipl -q -f scripts/generate_monocurl_graph_data.pl \
 %       -g "run(30, 5, 0.15, 31, 0, 29, 'visualization-support/graph_data.mcs')" -t halt
 %
 % Arguments:
@@ -28,65 +28,31 @@
 %   Out  : path of the generated .mcs data file
 %
 % HOW TO INTEGRATE WITH MONOCURL
-%   Monocurl has no way to run Prolog, so this driver produces plain Monocurl
-%   `let` declarations (as .mcs text) that you copy-paste into the scene file.
-%   Concretely:
-%     1. Run the driver to (re)generate a graph_data.mcs file.
-%     2. Open visualization.mcs and replace everything between the
-%        "<graph-data>" and "# <graph-data>" markers with the generated content
-%        (copy it verbatim; the generator also emits the explanatory comments).
-%     3. If you changed N / Start / Goal, also update the scene constants
-%        (GRAPH_LOCAL_CENTER, START_ID, GOAL_ID) and the intro/comparison text
-%        that mentions the graph size or the node ids.
-%   The generator emits Prolog terms v(Id,X,Y) / e(U,V,D) as Monocurl lists
-%   [Id,X,Y] / [U,V,D] so they can be consumed directly by the scene.
+%   Monocurl has no way to run Prolog, so this driver writes a generated .mcl
+%   file. The map is named after the file: gen/graph20.mcl defines `graph20`,
+%   gen/graph.mcl defines `graph`, and so on. Scenes import that file and pass
+%   the map to the graph functions in common.mcl.
 %
-% The generated file defines the following Monocurl names (copy it into the
-% scene file in place of the <graph-data> marker):
-%   GRAPH_POINTS  : list of [id, x, y]
-%   GRAPH_EDGES   : list of [a, b, dist]
-%   DIJK_EXPAND   : ordered node ids expanded by Dijkstra
-%   DIJK_PATH     : node ids on the Dijkstra path
-%   DIJK_DIST     : total distance of that path
-%   DIJK_G        : per step, the settled distance g(expand[i])
-%   DIJK_OPEN     : per step, after expanding expand[i], the open list as
-%                   [[id, g], ...] (deduped, ascending g)
-%   DIJK_PICK     : per step, the node Dijkstra expands next (min g; -1 at end)
-%   DIJK_RELAX    : per step, [neighbour, edge_weight, candidate_g, improved (1/0)]
-%   DIJK_PRED     : per step, the predecessor edge [parent, child] ([] at start)
-%   ASTAR_EXPAND  : ordered node ids expanded by A*
-%   ASTAR_PATH    : node ids on the A* path
-%   ASTAR_DIST    : total distance of that path
-%   ASTAR_STEPS   : per step [current, [candidate neighbours], chosen]
-%   ASTAR_PENDING : per step, after expanding expand[i], the full A* open list
-%                   as [[id, f], ...] in f order
-%   HILL_EXPAND   : ordered node ids visited by Hill Climbing
-%   HILL_PATH     : node ids on the Hill Climbing path
-%   HILL_DIST     : total distance of that path
-%   HILL_STATUS   : 'reach' or 'stuck' (Hill Climbing may fail on a dead end)
-%   HILL_STEPS    : per step [current, [[candidate, edge_weight], ...], chosen]
-%                   (candidates in graph-edge order; chosen = minimum weight)
-%   BEST_EXPAND   : first-visit order of nodes expanded by Best-First
-%   BEST_PATH     : node ids on the Best-First path
-%   BEST_DIST     : total distance of that path
-%   BEST_STEPS    : per step [current, [[candidate, h], ...], next] - the children
-%                   pushed by that expansion (h = straight-line distance to the
-%                   goal, which is the queue key) and the next first-visit node
-%                   (-1 on the last row)
-%   BEST_PENDING  : per step, after expanding expand[i], the open list as
-%                   [[id, h], ...] in queue order (deduped by id, nodes that were
-%                   already expanded removed)
-%   BEST_PRED     : per step, the predecessor edge [parent, child] ([] for the start)
-%   BFS_EXPAND    : first-visit order of nodes expanded by BFS
-%   BFS_PATH      : node ids on the BFS path
-%   BFS_STEPS     : per step [current, queue_after, [[parent, child], ...], depth]
-%   DFS_EXPAND    : first-visit order of nodes expanded by DFS
-%   DFS_PATH      : node ids on the DFS path
-%   DFS_STEPS     : per step [current, current_path, stack_heads,
-%                   [[parent, child], ...], depth, backtracked?]  (1/0)
+% The generated file defines a single map with the graph plus every algorithm
+% trace. All keys are strings, so access uses graph["nodes"], graph["dijkstra"],
+% etc. Graph-level keys:
+%   "nodes"         : list of [id, x, y]
+%   "edges"         : list of [a, b, dist] (the final small-world graph)
+%   "knn_edges"     : [a, b, dist] edges still present from the KNN backbone
+%   "rewired_edges" : [a, b, dist] edges introduced by the rewiring step
+%   "n", "k", "p", "seed" : generator parameters
+%   "start_id"      : search source vertex id
+%   "goal_id"       : search target vertex id
 %
-% Every *_PATH is ordered start -> goal, so the scene can draw it directly as a
-% Polyline. The *_EXPAND sequences are de-duplicated (first visit wins) so the
+% Each algorithm is a nested map. For example, graph["dijkstra"] contains:
+%   "expand", "path", "dist", "g", "open", "pick", "relax", "pred"
+% graph["astar"] contains "expand", "path", "dist", "steps", "pending";
+% graph["hill"] contains "expand", "path", "dist", "status", "steps";
+% graph["best"] contains "expand", "path", "dist", "steps", "pending", "pred";
+% graph["bfs"] and graph["dfs"] contain "expand", "path", "steps".
+%
+% Every "path" is ordered start -> goal, so the scene can draw it directly as a
+% Polyline. The "expand" sequences are de-duplicated (first visit wins) so the
 % animation reveals the set of explored nodes instead of repeated frontier
 % entries.
 
@@ -538,7 +504,7 @@ nudge_all_pairs_simple([V | Rest], [V1 | Rest1]) :-
     nudge_away_simple(V, Rest, V1),
     nudge_all_pairs_simple(Rest, Rest1).
 
-nudge_away_simple(_, [], V) :- V = V.
+nudge_away_simple(V, [], V).
 nudge_away_simple(v(I, X0, Y0), [v(_, X2, Y2) | Others], v(I, XN, YN)) :-
     Dist is sqrt((X0 - X2)*(X0 - X2) + (Y0 - Y2)*(Y0 - Y2)),
     (   Dist < 4.0, Dist > 0.01      % Increased threshold from 3.0 to 4.0
@@ -579,15 +545,20 @@ run(N, K, P, Seed, Vi, Vf, Out) :-
     gera_vertices(N, VerticesRaw),
     % Build initial graph topology (KNN + rewiring)
     gera_arestas(VerticesRaw, K, KNN),
-    reconecta_arestas(KNN, VerticesRaw, P, ArestasRaw),
-    sort(ArestasRaw, ArestasRawS),
+    reconecta_arestas(KNN, VerticesRaw, P, _ArestasRaw),
     % Apply enhanced nudge for better layout
     nudge_vertices_simple(VerticesRaw, Vertices),
     % Rebuild edges with NEW positions (weights = Euclidean distance in laid-out space)
-    gera_arestas(Vertices, K, KNN),
-    reconecta_arestas(KNN, Vertices, P, Arestas),
+    gera_arestas(Vertices, K, KNN2),
+    % Track KNN edges after nudge (same topology, new positions)
+    sort(KNN2, KNNS2),
+    reconecta_arestas(KNN2, Vertices, P, Arestas),
     sort(Arestas, ArestasS),
     sort(Vertices, VerticesS),
+    % Determine which edges were rewired (in final graph but not in KNN)
+    find_rewired_edges(KNNS2, ArestasS, RewiredEdges),
+    % KNN edges that remain in final graph
+    find_knn_edges(KNNS2, ArestasS, KNNEdgesFinal),
     % Run the instrumented searches.  On seeds where the goal is unreachable a
     % search would spin forever under SWI-Prolog's tail-call handling of
     % findall/5, so each search throws unreachable instead; catch it and
@@ -653,7 +624,7 @@ run(N, K, P, Seed, Vi, Vf, Out) :-
     reverse(PathD, PathDf),
     reverse(PathA, PathAf),
     write_data(Out, N, K, P, Seed, Vi, Vf,
-               VerticesS, ArestasS,
+               VerticesS, ArestasS, KNNEdgesFinal, RewiredEdges,
                OrderD, PathDf, DistD, DijOpen, DijPick, DijRelax, DijPred, DijG,
                OrderA, PathAf, DistA, AstarSteps, AstarPending,
                OrderH, PathH, DistH, StatusH, HillSteps,
@@ -664,87 +635,105 @@ run(N, K, P, Seed, Vi, Vf) :-
     atomic_concat(['graph_data_n', N, '_k', K, '_p', P, '_s', Seed, '.mcs'], Out),
     run(N, K, P, Seed, Vi, Vf, Out).
 
-write_data(Out, N, K, P, Seed, Vi, Vf, Vertices, Arestas,
+write_data(Out, N, K, P, Seed, Vi, Vf, Vertices, Arestas, KNNEdgesFinal, RewiredEdges,
            OrderD, PathD, DistD, DijOpen, DijPick, DijRelax, DijPred, DijG,
            OrderA, PathA, DistA, AstarSteps, AstarPending,
            OrderH, PathH, DistH, StatusH, HillSteps,
            OrderBest, PathBest, DistBest, BestSteps, BestPending, BestPred,
            OrderB, PathB, BfsSteps, OrderDfs, PathDfs, DfsSteps) :-
+    file_base_name(Out, FileName),
+    file_name_extension(GraphName, mcl, FileName),
     open(Out, write, S),
-    format(S, '~n# AUTO-GENERATED by visualization-support/generate_data.pl~n', []),
+    format(S, '~n# AUTO-GENERATED by scripts/generate_monocurl_graph_data.pl~n', []),
     format(S, '# Do not edit by hand - rerun the generator to refresh.~n', []),
     format(S, '# Small-World graph: N=~w  K=~w  P=~w  seed=~w~n', [N, K, P, Seed]),
     format(S, '# Start=~w  Goal=~w~n~n', [Vi, Vf]),
+    format(S, '# One map with the graph and every algorithm trace. Keys are strings.~n~n', []),
 
-    format(S, 'let GRAPH_POINTS = ', []), emit_list(S, Vertices), format(S, '~n~n', []),
-    format(S, 'let GRAPH_EDGES = ', []), emit_list(S, Arestas), format(S, '~n~n', []),
-
-    write_alg(S, 'DIJK_EXPAND', OrderD),
-    write_alg(S, 'DIJK_PATH', PathD),
-    format(S, 'let DIJK_DIST = ~w~n~n', [DistD]),
-    format(S, '# DIJK_G: g(expand[i]), the settled distance of each expanded node.~n', []),
-    write_alg(S, 'DIJK_G', DijG),
-    format(S, '# DIJK_OPEN / DIJK_PICK: after expanding expand[i], the deduped open list as~n', []),
-    format(S, '# [node_id, g] pairs in ascending g order, and the node expanded next~n', []),
-    format(S, '# (the minimum-g head; -1 on the final row).~n', []),
-    write_alg(S, 'DIJK_OPEN', DijOpen),
-    write_alg(S, 'DIJK_PICK', DijPick),
-    format(S, '# DIJK_RELAX: per step, [neighbour, edge_weight, candidate_g, improved (1/0)]~n', []),
-    format(S, '# for every edge considered from the current node.~n', []),
-    write_alg(S, 'DIJK_RELAX', DijRelax),
-    format(S, '# DIJK_PRED: per step, the predecessor edge [parent, child] ([] for the start).~n', []),
-    write_alg(S, 'DIJK_PRED', DijPred),
-    format(S, '~n', []),
-
-    write_alg(S, 'ASTAR_EXPAND', OrderA),
-    write_alg(S, 'ASTAR_PATH', PathA),
-    format(S, 'let ASTAR_DIST = ~w~n~n', [DistA]),
-    format(S, '# ASTAR_STEPS: per step [current, [candidate neighbours], chosen].~n', []),
-    write_alg(S, 'ASTAR_STEPS', AstarSteps),
-    format(S, '# ASTAR_PENDING: the full priority queue (open list) after each expansion, as~n', []),
-    format(S, '# [node_id, f] pairs in ascending f order. The head is the node A* expands next.~n', []),
-    write_alg(S, 'ASTAR_PENDING', AstarPending),
-    format(S, '~n', []),
-
-    write_alg(S, 'HILL_EXPAND', OrderH),
-    write_alg(S, 'HILL_PATH', PathH),
-    format(S, 'let HILL_DIST = ~w~n~n', [DistH]),
-    format(S, '# HILL_STATUS is "reach" or "stuck" (Hill Climbing may dead-end).~n', []),
-    format(S, 'let HILL_STATUS = "~w"~n~n', [StatusH]),
-    format(S, '# HILL_STEPS: per step [current, [[candidate, edge_weight], ...], chosen];~n', []),
-    format(S, '# candidates are in graph-edge order and chosen is the minimum-weight neighbour.~n', []),
-    write_alg(S, 'HILL_STEPS', HillSteps),
-    format(S, '~n', []),
-
-    format(S, '# Best-First: greedy search on the heuristic h only (straight-line distance to the goal).~n', []),
-    write_alg(S, 'BEST_EXPAND', OrderBest),
-    write_alg(S, 'BEST_PATH', PathBest),
-    format(S, 'let BEST_DIST = ~w~n~n', [DistBest]),
-    format(S, '# BEST_STEPS: per step [current, [[candidate, h], ...], next first-visit node (-1 at the end)].~n', []),
-    write_alg(S, 'BEST_STEPS', BestSteps),
-    format(S, '# BEST_PENDING: open list after each expansion as [node_id, h] pairs in queue order.~n', []),
-    write_alg(S, 'BEST_PENDING', BestPending),
-    format(S, '# BEST_PRED: per step, the predecessor edge [parent, child] ([] for the start).~n', []),
-    write_alg(S, 'BEST_PRED', BestPred),
-    format(S, '~n', []),
-
-    format(S, '# BFS / DFS: unweighted traversals over the same network. *_EXPAND is the~n', []),
-    format(S, '# first-visit order; *_PATH is the path found from start to goal.~n', []),
-    write_alg(S, 'BFS_EXPAND', OrderB),
-    write_alg(S, 'BFS_PATH', PathB),
-    format(S, '# BFS_STEPS: per step [current, queue_after, [[parent, child], ...], depth].~n', []),
-    write_alg(S, 'BFS_STEPS', BfsSteps),
-    write_alg(S, 'DFS_EXPAND', OrderDfs),
-    write_alg(S, 'DFS_PATH', PathDfs),
-    format(S, '# DFS_STEPS: per step [current, current_path, stack_heads,~n', []),
-    format(S, '# [[parent, child], ...], depth, backtracked (1/0)].~n', []),
-    write_alg(S, 'DFS_STEPS', DfsSteps),
+    format(S, 'let ~w = [~n', [GraphName]),
+    write_fields(S, '    ',
+        [ list("nodes", Vertices),
+          list("edges", Arestas),
+          list("knn_edges", KNNEdgesFinal),
+          list("rewired_edges", RewiredEdges),
+          atom("n", N),
+          atom("k", K),
+          atom("p", P),
+          atom("seed", Seed),
+          atom("start_id", Vi),
+          atom("goal_id", Vf),
+          map("dijkstra",
+              [ list("expand", OrderD),
+                list("path", PathD),
+                atom("dist", DistD),
+                list("g", DijG),
+                list("open", DijOpen),
+                list("pick", DijPick),
+                list("relax", DijRelax),
+                list("pred", DijPred)
+              ]),
+          map("astar",
+              [ list("expand", OrderA),
+                list("path", PathA),
+                atom("dist", DistA),
+                list("steps", AstarSteps),
+                list("pending", AstarPending)
+              ]),
+          map("hill",
+              [ list("expand", OrderH),
+                list("path", PathH),
+                atom("dist", DistH),
+                string("status", StatusH),
+                list("steps", HillSteps)
+              ]),
+          map("best",
+              [ list("expand", OrderBest),
+                list("path", PathBest),
+                atom("dist", DistBest),
+                list("steps", BestSteps),
+                list("pending", BestPending),
+                list("pred", BestPred)
+              ]),
+          map("bfs",
+              [ list("expand", OrderB),
+                list("path", PathB),
+                list("steps", BfsSteps)
+              ]),
+          map("dfs",
+              [ list("expand", OrderDfs),
+                list("path", PathDfs),
+                list("steps", DfsSteps)
+              ])
+        ]),
+    format(S, ']~n', []),
     close(S).
 
-write_alg(S, Name, List) :-
-    format(S, 'let ~w = ', [Name]),
+write_fields(S, Indent, [Field]) :-
+    !,
+    write_field(S, Indent, Field, last).
+write_fields(S, Indent, [Field | Rest]) :-
+    write_field(S, Indent, Field, comma),
+    write_fields(S, Indent, Rest).
+
+write_field(S, Indent, list(Key, List), End) :-
+    format(S, '~w"~w" -> ', [Indent, Key]),
     emit_list(S, List),
-    format(S, '~n', []).
+    write_end(S, End).
+write_field(S, Indent, atom(Key, Value), End) :-
+    format(S, '~w"~w" -> ~w', [Indent, Key, Value]),
+    write_end(S, End).
+write_field(S, Indent, string(Key, Value), End) :-
+    format(S, '~w"~w" -> "~w"', [Indent, Key, Value]),
+    write_end(S, End).
+write_field(S, Indent, map(Key, Fields), End) :-
+    format(S, '~w"~w" -> [~n', [Indent, Key]),
+    atom_concat(Indent, '    ', SubIndent),
+    write_fields(S, SubIndent, Fields),
+    format(S, '~w]', [Indent]),
+    write_end(S, End).
+
+write_end(S, last) :- format(S, '~n', []).
+write_end(S, comma) :- format(S, ',~n', []).
 
 % Prolog shim: write_string/2 is just write/2 to avoid ambiguity warnings.
 write_string(S, X) :- write(S, X).
@@ -766,3 +755,27 @@ dedupe_pairs_([[Id, V] | Rest], Seen, Acc, Out) :-
     ->  dedupe_pairs_(Rest, Seen, Acc, Out)
     ;   dedupe_pairs_(Rest, [Id | Seen], [[Id, V] | Acc], Out)
     ).
+
+% =============================================================================
+% ---------- Edge classification for SW network animation ----------------------
+% =============================================================================
+
+% Find edges that were rewired (present in final graph but not in KNN)
+% Edges are compared by their endpoints (U, V), ignoring weights since
+% weights change after the nudge.
+find_rewired_edges(KNN, Final, Rewired) :-
+    findall(E,
+        ( member(E, Final),
+          E = e(U, V, _),
+          \+ member(e(U, V, _), KNN)
+        ),
+        Rewired).
+
+% Find KNN edges that remain in the final graph
+find_knn_edges(KNN, Final, KNNFinal) :-
+    findall(E,
+        ( member(E, KNN),
+          E = e(U, V, _),
+          member(e(U, V, _), Final)
+        ),
+        KNNFinal).

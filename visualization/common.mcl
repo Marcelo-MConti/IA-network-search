@@ -1,0 +1,645 @@
+# Definições compartilhadas pelas cenas de grafos Small World.
+#
+# O grafo é sempre passado como parâmetro na forma de um map. Cada arquivo
+# gerado define um map com o nome do arquivo, por exemplo gen/graph20.mcl:
+#
+#   let graph20 = [
+#       "nodes" -> [...], "edges" -> [...], ...,
+#       "dijkstra" -> [...], "astar" -> [...], ...
+#   ]
+#
+# Todas as funções deste arquivo recebem esse map como primeiro parâmetro, de
+# modo que várias redes possam coexistir na mesma cena. Como em Monocurl chaves
+# de map são strings, o acesso é feito com graph["nodes"], graph["dijkstra"], etc.
+# Helpers puramente genéricos ficam em lib.mcl.
+
+import std.util
+import std.math
+import std.color
+import std.mesh
+import std.anim
+import std.scene
+import lib
+
+
+# =============================================================================
+# CONSTANTES DO PROJETO (não dependem do grafo)
+# =============================================================================
+
+# --- Quadro ---
+let FRAME_H = 4
+let FRAME_W = FRAME_H * aspect_ratio()
+let MARGIN = 0.25
+
+# Faixas reservadas: título + subtítulo no topo, legenda embaixo.
+let TOP_BAND = 0.7
+let BOTTOM_BAND = 0.45
+
+# --- Painel lateral (direita) ---
+let PANEL_W = 2.6
+let PANEL_GAP = 0.25
+let PANEL_PAD = 0.15
+let PANEL_ROW_H = 0.3
+
+# --- Área útil (entre as faixas) e posição do painel ---
+let AREA_TOP = FRAME_H / 2 - TOP_BAND
+let AREA_BOTTOM = BOTTOM_BAND - FRAME_H / 2
+let AREA_H = AREA_TOP - AREA_BOTTOM
+let AREA_MID_Y = (AREA_TOP + AREA_BOTTOM) / 2
+let PANEL_H = AREA_H
+let PANEL_CENTER = [FRAME_W / 2 - MARGIN - PANEL_W / 2, AREA_MID_Y, 0]
+let AREA_LEFT = MARGIN - FRAME_W / 2
+let AREA_RIGHT = PANEL_CENTER[0] - PANEL_W / 2 - PANEL_GAP
+
+# --- Cores ---
+let EDGE_COLOR = [0.42, 0.45, 0.5, 1]    # RGBA
+let KNN_EDGE_COLOR = [0.2, 0.6, 0.2, 1]  # Verde para arestas KNN
+let REWIRED_EDGE_COLOR = [0.8, 0.3, 0.2, 1]  # Vermelho/laranja para arestas reconectadas
+
+let START_COLOR = GREEN
+let GOAL_COLOR = RED
+
+let DIJK_COLOR = CYAN
+let ASTAR_COLOR = MAGENTA
+let BEST_COLOR = YELLOW
+let HILL_COLOR = ORANGE
+let BFS_COLOR = BLUE
+let DFS_COLOR = PURPLE
+
+# Relaxamento que melhora o g conhecido vs. o que não melhora / ramos abandonados.
+let IMPROVE_COLOR = [0.10, 0.62, 0.26, 1]
+let STALE_COLOR = [0.55, 0.55, 0.58, 1]
+
+# --- Espessuras de traço ---
+let EDGE_W = 0.7        # arestas do grafo
+let NODE_STROKE = 2
+let TREE_W = 2.5        # árvore / trilha da busca
+let RELAX_W = 1.5       # arestas de relaxamento (Dijkstra) e guia h (A*)
+let HILL_W = 2.5        # arestas candidatas da escalada
+let PATH_W = 4.5        # caminho final
+let ANIM_EDGE_W = 2.0   # arestas durante animação de construção
+
+# --- Camadas (z_index) ---
+let Z_EDGE = 0
+let Z_TREE = 1
+let Z_PATH = 2
+let Z_NODE = 3
+let Z_EXPLORED = 4
+let Z_ENDPOINT = 5
+let Z_RING = 6
+let Z_PICK = 7
+let Z_TAG_BG = 8
+let Z_LABEL = 9
+let Z_PANEL_BG = 10
+let Z_PANEL_HL = 11
+let Z_HIGHLIGHT = 10  # alias para Z_RING
+let Z_TEXT = 12
+
+# --- Tipografia ---
+let SANS_FONT = "Fira Sans"
+let MONO_FONT = "Fira Mono"
+
+let FS_COVER_TITLE = 1.4
+let FS_COVER_SUB = 1.0
+let FS_COVER_BODY = 0.8
+let FS_AUTHOR = 0.65
+let FS_AUTHOR_ID = 0.55
+
+let FS_TITLE = 0.92
+let FS_SUBTITLE = 0.56
+let FS_CAPTION = 0.56
+let FS_NODE_ID = 5       # em coordenadas locais do grafo (efetivo = FS_NODE_ID * unidade)
+let FS_TAG = 0.5         # rótulos g= / f= ao lado dos nós
+let FS_PANEL_HEAD = 0.76
+let FS_PANEL_SUB = 0.5
+let FS_ROW = 0.6
+let FS_MARK = 0.5
+let FS_TABLE = 0.7
+let FS_TABLE_HEAD = 0.64
+let FS_PANEL_BODY = 0.5
+
+let MATH_DROP = 0.11
+
+let TAG_UR = [0.3, 0.12, 0]
+let TAG_UL = [-0.3, 0.12, 0]
+
+# Raio dos nós em coordenadas locais do grafo.
+let NODE_R = 0.9
+
+
+# =============================================================================
+# INSTÂNCIAS DAS FÁBRICAS GENÉRICAS DE lib.mcl
+# =============================================================================
+
+let Sans = make_Sans(SANS_FONT)
+let MathText = make_MathText(MATH_DROP)
+let TextAt = make_TextAt(Z_TEXT, Sans)
+let Title = make_Title(FS_TITLE, FRAME_W, Sans)
+let piece = make_piece(Sans)
+let Subtitle = make_Subtitle(FRAME_W, piece)
+let Caption = make_Caption(FS_CAPTION, FRAME_W, Sans)
+let StepCaption = make_StepCaption(Caption)
+let Footer = make_Footer(FS_CAPTION, FRAME_W, MARGIN, Sans)
+
+
+# =============================================================================
+# FUNÇÕES AUXILIARES ESPECÍFICAS DO PROJETO
+# =============================================================================
+
+# Cor de relaxamento: verde quando melhora o melhor g conhecido, cinza caso contrário.
+let relax_color = |improved| {
+    if (improved == 1) { return IMPROVE_COLOR }
+    return STALE_COLOR
+}
+
+
+# =============================================================================
+# GEOMETRIA DO GRAFO (recebe o map do grafo)
+# =============================================================================
+
+# Ponto [id, x, y] do nó `id`.
+let node_of = |graph, id| filter(graph["nodes"], |p| p[0] == id)[0]
+
+# Coordenadas locais do nó `id`.
+let node_local = |graph, id| {
+    let p = node_of(graph, id)
+    return [p[1], p[2], 0]
+}
+
+# Escala que ajusta o grafo à área útil (à esquerda do painel).
+let graph_unit = |graph| {
+    let xs = map(graph["nodes"], |p| p[1])
+    let ys = map(graph["nodes"], |p| p[2])
+    let pad = 1.2
+    let span_x = max_of(xs) - min_of(xs) + 2 * pad
+    let span_y = max_of(ys) - min_of(ys) + 2 * pad
+    return min((AREA_RIGHT - AREA_LEFT) / span_x, AREA_H / span_y)
+}
+
+# Origem da conversão local -> cenário.
+let graph_origin = |graph| {
+    let xs = map(graph["nodes"], |p| p[1])
+    let ys = map(graph["nodes"], |p| p[2])
+    let local_center = [(min_of(xs) + max_of(xs)) / 2, (min_of(ys) + max_of(ys)) / 2, 0]
+    let screen_center = [(AREA_LEFT + AREA_RIGHT) / 2, AREA_MID_Y, 0]
+    let unit = graph_unit(graph)
+    return [
+        screen_center[0] - local_center[0] * unit,
+        screen_center[1] - local_center[1] * unit,
+        0
+    ]
+}
+
+# Coordenadas locais -> coordenadas do cenário.
+let graph_screen = |graph, id| {
+    let p = node_local(graph, id)
+    let origin = graph_origin(graph)
+    let unit = graph_unit(graph)
+    return [origin[0] + unit * p[0], origin[1] + unit * p[1], 0]
+}
+
+# Heurística de A*: distância euclidiana ao destino (coordenadas locais).
+let graph_h = |graph, id| norm(node_local(graph, id) - node_local(graph, graph["goal_id"]))
+
+# Peso da aresta entre dois nós (a lista de arestas é não-direcionada).
+let graph_weight = |graph, a, b|
+    filter(graph["edges"], |e| (e[0] == a and e[1] == b) or (e[0] == b and e[1] == a))[0][2]
+
+# Custo total de um caminho.
+let graph_path_cost = |graph, p| sum(map(Chain(p), |pr| graph_weight(graph, pr[0], pr[1])))
+
+# Aplica a conversão local -> cenário a uma malha construída em coordenadas locais.
+let graph_embed = |graph, target|
+    in_space{graph_origin(graph), graph_unit(graph) * 1r, graph_unit(graph) * 1u}
+    target
+
+
+# =============================================================================
+# MALHAS DO GRAFO (recebem o map do grafo)
+# =============================================================================
+
+let EdgeSet = |graph, edge_list|
+    graph_embed(graph,
+        block {
+            for (e in edge_list) {
+                . Line(node_local(graph, e[0]), node_local(graph, e[1]))
+            }
+        })
+
+let DashedEdge = |graph, a, b, c, w, dash|
+    graph_embed(graph,
+        z_index{Z_TREE}
+        dashed{dash}
+        stroke{c, w}
+        Line(node_local(graph, a), node_local(graph, b)))
+
+let AnimEdge = |graph, a, b, c, w|
+    graph_embed(graph,
+        z_index{Z_EDGE}
+        stroke{c, w}
+        Line(node_local(graph, a), node_local(graph, b)))
+
+let NodeCircle = |graph, id, r|
+    graph_embed(graph,
+        fill{WHITE}
+        center{node_local(graph, id)}
+        Circle(r))
+
+let GraphEdges = |graph| stroke{EDGE_COLOR, EDGE_W} z_index{Z_EDGE} EdgeSet(graph, graph["edges"])
+
+let KNNEdges = |graph| stroke{KNN_EDGE_COLOR, EDGE_W} z_index{Z_EDGE} EdgeSet(graph, graph["knn_edges"])
+
+let RewiredEdges = |graph| stroke{REWIRED_EDGE_COLOR, 1.6} z_index{Z_TREE} EdgeSet(graph, graph["rewired_edges"])
+
+let AllNodes = |graph|
+    z_index{Z_NODE}
+    stroke{EDGE_COLOR, NODE_STROKE}
+    block {
+        for (pt in graph["nodes"]) {
+            . tag{pt[0]} NodeCircle(graph, pt[0], NODE_R)
+        }
+    }
+
+# Cor do rótulo: branco quando o nó está pintado com uma cor forte, preto caso
+# contrário. Isso também evita rótulos brancos sobre nós brancos nas cenas em
+# que a origem/destino ainda não foram destacados.
+let ink_for = |graph, id, inked| {
+    let hit = filter(inked, |e| e[0] == id)
+    if (len(hit) == 0) { return BLACK }
+    return ink_on(hit[0][1])
+}
+
+# Para grafos grandes, os rótulos numéricos só poluem a cena.
+let NodeLabels = |graph, inked| {
+    if (graph["n"] > 50) { return [] }
+    return graph_embed(graph,
+        z_index{Z_LABEL}
+        block {
+            for (pt in graph["nodes"]) {
+                . center{node_local(graph, pt[0])} color{ink_for(graph, pt[0], inked)} Sans(to_string(pt[0]), FS_NODE_ID)
+            }
+        })
+}
+
+let ExploredNode = |graph, id, c|
+    tag{id}
+    z_index{Z_EXPLORED}
+    fill{c}
+    stroke{darken(c), 1.5}
+    NodeCircle(graph, id, NODE_R * 1.15)
+
+let Endpoint = |graph, id, c|
+    tag{id}
+    z_index{Z_ENDPOINT}
+    fill{c}
+    stroke{darken(c), NODE_STROKE}
+    NodeCircle(graph, id, NODE_R * 1.3)
+
+let CandidateRing = |graph, id, c|
+    graph_embed(graph,
+        tag{id}
+        z_index{Z_RING}
+        fill{CLEAR}
+        stroke{c, 1.75}
+        dashed{[0.4, 0.4]}
+        center{node_local(graph, id)}
+        Circle(NODE_R * 1.65))
+
+let Rings = |graph, ids, col|
+    block {
+        for (id in ids) {
+            . CandidateRing(graph, id, col)
+        }
+    }
+
+let PickMark = |graph, id, col|
+    tag{id}
+    z_index{Z_PICK}
+    fill{alpha{0.25} col}
+    stroke{col, 3}
+    NodeCircle(graph, id, NODE_R * 1.65)
+
+let AbandonMark = |graph, id|
+    graph_embed(graph,
+        z_index{Z_RING}
+        fill{alpha{0.18} STALE_COLOR}
+        stroke{STALE_COLOR, 3}
+        dashed{[0.16, 0.1]}
+        center{node_local(graph, id)}
+        Circle(NODE_R * 1.95))
+
+let PathMesh = |graph, path, col|
+    graph_embed(graph,
+        z_index{Z_PATH}
+        stroke{darken(col), PATH_W}
+        Polyline(map(path, |id| node_local(graph, id))))
+
+let TreeEdges = |graph, edge_list, col| stroke{col, TREE_W} z_index{Z_TREE} EdgeSet(graph, edge_list)
+
+let NodeTag = |graph, id, str, c, off| {
+    let t = center{graph_screen(graph, id) + off} color{c} Sans(str, FS_TAG)
+    return [
+        z_index{Z_TAG_BG} stroke{CLEAR} fill{alpha{0.9} WHITE} BoundingBox(t, 0.025),
+        z_index{Z_LABEL} t
+    ]
+}
+
+
+# =============================================================================
+# PAINÉIS LATERAIS
+# =============================================================================
+
+let Panel = |head, sub, info, rows, cols, col, mark, hi| {
+    let half_h = PANEL_H / 2
+    let left = -PANEL_W / 2
+    let inner = PANEL_W - 2 * PANEL_PAD
+    let rows_y0 = half_h - 0.9 - len(info) * 0.26
+    let slots = to_int(floor((rows_y0 - (PANEL_PAD - half_h)) / PANEL_ROW_H)) + 1
+    let shown = take(rows, slots - 1)
+    return shift{PANEL_CENTER} block {
+        . z_index{Z_PANEL_BG} fill{alpha{0.06} col} stroke{darken(col), 1.2} Rect([PANEL_W, PANEL_H])
+        . TextAt(head, FS_PANEL_HEAD, darken(col), 0, half_h - 0.24, "c", inner)
+        . TextAt(sub, FS_PANEL_SUB, DARK_GRAY, 0, half_h - 0.5, "c", inner)
+        for ([k, line] in enumerate(info)) {
+            . TextAt(line, FS_PANEL_SUB + 0.04, BLACK, left + PANEL_PAD, half_h - 0.76 - k * 0.26, "l", inner)
+        }
+        if (len(rows) == 0) {
+            . TextAt("(vazia)", FS_ROW, DARK_GRAY, 0, rows_y0, "c", inner)
+        }
+        for ([i, row] in enumerate(shown)) {
+            let y = rows_y0 - i * PANEL_ROW_H
+            var c = BLACK
+            if (i == 0 and hi == 1) {
+                c = darken(col)
+                . z_index{Z_PANEL_HL} fill{alpha{0.2} col} stroke{CLEAR} shift{[0, y, 0]} Rect([inner + 0.1, PANEL_ROW_H - 0.04])
+            }
+            for ([j, cell] in enumerate(row)) {
+                . TextAt(cell, FS_ROW, c, left + cols[j][0], y, cols[j][1], inner)
+            }
+            if (i == 0 and len(mark) > 0) {
+                . TextAt(mark, FS_MARK, darken(col), left + PANEL_W - PANEL_PAD, y, "r", 1.0)
+            }
+        }
+        if (len(rows) > len(shown)) {
+            . TextAt("+ " + to_string(len(rows) - len(shown)) + " mais", FS_PANEL_SUB, DARK_GRAY, left + PANEL_PAD, rows_y0 - len(shown) * PANEL_ROW_H, "l", inner)
+        }
+    }
+}
+
+# Esquemas de colunas reutilizáveis.
+let COLS_ID = [[0.2, "l"]]
+let COLS_SCORE = [[0.2, "l"], [0.8, "l"]]
+let COLS_ASTAR = [[0.2, "l"], [0.7, "l"], [1.45, "l"]]
+let COLS_SUMMARY = [[PANEL_PAD, "l"], [PANEL_W - PANEL_PAD, "r"]]
+
+# XXX: implementar pop e push corretos usando trans ou algo do tipo
+
+# Lista de IDs (fila BFS, pilha DFS).
+let ListPanel = |ids, head, sub, info, mark, col|
+    Panel(head, sub, info, map(ids, |id| [to_string(id)]), COLS_ID, col, mark, 1)
+
+# Lista de [id, valor] com um prefixo (g=, w=...): lista aberta do Dijkstra, candidatos da escalada.
+let ScoredPanel = |entries, tag, head, sub, mark, col|
+    Panel(head, sub, [], map(entries, |e| [to_string(e[0]), tag + "=" + num1(e[1])]), COLS_SCORE, col, mark, 1)
+
+# Lista aberta de A*: mostra f e sua decomposição g + h.
+let AstarPanel = |graph, pending, col|
+    Panel("Nós a serem visitados", "menor f primeiro  •  f = g + h", [],
+          map(unique_pending(pending),
+              |e| [to_string(e[0]), "f=" + num1(e[1]), num1(e[1] - graph_h(graph, e[0])) + " + " + num1(graph_h(graph, e[0]))]),
+          COLS_ASTAR, col, "", 1)
+
+# Resumo final de um algoritmo.
+let SummaryPanel = |graph, expand, path, verdict, col|
+    Panel("Resultado", verdict, [],
+          [["Explorados", to_string(len(expand))],
+           ["Passos", to_string(len(path) - 1)],
+           ["Distância", num1(graph_path_cost(graph, path))]],
+          COLS_SUMMARY, col, "", 0)
+
+# Resumo da rede (slide "O grafo").
+let GraphInfoPanel = |graph|
+    Panel("Rede", "Pequeno Mundo", [],
+          [["Nós", to_string(len(graph["nodes"]))],
+           ["Arestas", to_string(len(graph["edges"]))],
+           ["Vizinhos (K)", to_string(graph["k"])],
+           ["Reconexão (p)", to_string(graph["p"])],
+           ["Origem", to_string(graph["start_id"])],
+           ["Destino", to_string(graph["goal_id"])]],
+          COLS_SUMMARY, GRAY, "", 0)
+
+
+# =============================================================================
+# CENAS TRANSITÓRIAS DE CADA PASSO (sobreposições no grafo)
+# =============================================================================
+
+# Dijkstra: rótulo g do nó expandido, anéis na lista aberta e arestas de
+# relaxamento (verde = melhora o g conhecido, cinza = não melhora).
+let DijkstraOverlay = |graph, cur, cur_g, open, relaxes, col|
+    block {
+        . NodeTag(graph, cur, "g=" + num1(cur_g), darken(col), TAG_UR)
+        . Rings(graph, map(open, |e| e[0]), col)
+        for ([nb, w, cand, improved] in relaxes) {
+            . DashedEdge(graph, cur, nb, relax_color(improved), RELAX_W, [0.5, 0.5])
+            if (improved == 1) {
+                . NodeTag(graph, nb, "g=" + num1(cand), darken(relax_color(1)), TAG_UL)
+            }
+        }
+    }
+
+# A*: anéis + rótulos f na lista aberta, e uma guia tracejada (a heurística h)
+# do próximo nó a expandir até o objetivo.
+let AstarOverlay = |graph, pending, col| {
+    let entries = unique_pending(pending)
+    return block {
+        for ([i, e] in enumerate(entries)) {
+            . CandidateRing(graph, e[0], col)
+            . NodeTag(graph, e[0], "f=" + num1(e[1]), darken(col), TAG_UR)
+            if (i == 0 and not (e[0] == graph["goal_id"])) {
+                . DashedEdge(graph, e[0], graph["goal_id"], col, RELAX_W, [0.5, 0.5])
+            }
+        }
+    }
+}
+
+# Best-First: anéis na lista aberta; rótulo h só nos filhos recém-gerados;
+# guia tracejada do próximo nó até o objetivo.
+let BestOverlay = |graph, open, cands, col|
+    block {
+        . Rings(graph, map(open, |e| e[0]), col)
+        for ([id, hv] in cands) {
+            . NodeTag(graph, id, "h=" + num1(hv), darken(col), TAG_UR)
+        }
+        if (len(open) > 0) {
+            if (not (open[0][0] == graph["goal_id"])) {
+                . DashedEdge(graph, open[0][0], graph["goal_id"], col, RELAX_W, [0.5, 0.5])
+            }
+        }
+    }
+
+# Hill Climbing: anéis e arestas candidatas a partir do nó atual.
+let HillOverlay = |graph, from, cands, col|
+    block {
+        . Rings(graph, map(cands, |c| c[0]), col)
+        for ([id, w] in cands) {
+            . DashedEdge(graph, from, id, col, HILL_W, [0.5, 0.5])
+        }
+    }
+
+# BFS: anéis em cada nó da fila.
+let BFSOverlay = |graph, queue, col| Rings(graph, queue, col)
+
+# DFS: anéis nas cabeças de ramo alternativas e marcas cinzas no ramo
+# abandonado por um retrocesso.
+let DFSOverlay = |graph, cur_path, heads, back, prev_path, col|
+    block {
+        . Rings(graph, unique_ids(heads), col)
+        if (back == 1) {
+            for (id in prev_path) {
+                if (lacks(cur_path, id)) {
+                    . AbandonMark(graph, id)
+                }
+            }
+        }
+    }
+
+
+# =============================================================================
+# EXECUTOR DE ANIMAÇÃO PASSO A PASSO
+#
+# `graph` é o map gerado pelo script: além da rede, ele contém as trilhas de
+# execução de cada algoritmo.
+# =============================================================================
+
+let RunSearch = |graph, &region, &labels, &trail, &cands, &pick, &panel, &path, &caption, spec| anim {
+    let expand = spec[0]
+    let col = spec[1]
+    let node_col = spec[2]
+    let trail_of = spec[3]
+    let path_of = spec[4]
+    let caption_of = spec[5]
+    let overlay_of = spec[6]
+    let panel_of = spec[7]
+    let pick_of = spec[8]
+
+    for (i in range(0, len(expand) - 1)) {
+        let cur = expand[i]
+        if (i > 0) {
+            region = [region, ExploredNode(graph, cur, node_col(i))]
+        }
+        let endpoint_inks = [[graph["start_id"], START_COLOR], [graph["goal_id"], GOAL_COLOR]]
+        labels = NodeLabels(graph, flatten([endpoint_inks, map(enumerate(take(expand, i + 1)), |p| [p[1], node_col(p[0])])]))
+        trail = TreeEdges(graph, trail_of(i), col)
+        path = path_of(i)
+        caption = StepCaption(i, caption_of(i))
+        play [
+            Grow(0.2, [&region]),
+            Grow(0.2, [&trail]),
+            Set([&labels, &path, &caption])
+        ]
+
+        cands = overlay_of(i)
+        panel = panel_of(i)
+
+        let nxt = pick_of(i)
+
+        if (nxt < 0) {
+            pick = []
+        } else {
+            pick = PickMark(graph, nxt, col)
+        }
+
+        play Fade(0.25, [&cands, &pick, &panel])
+        play Wait(0.5)
+
+        pick = []
+        cands = []
+        play Fade(0.25, [&cands, &pick])
+    }
+}
+
+
+# =============================================================================
+# BLOCOS DE LAYOUT DA CAPA E DA TABELA COMPARATIVA
+# =============================================================================
+
+# Um autor: nome + ID.
+let Author = |name, id|
+    VStack([
+        color{BLACK} Sans(name, FS_AUTHOR),
+        color{BLACK} Text("ID: " + id, FS_AUTHOR_ID, MONO_FONT)
+    ])
+
+# Autores em linhas de `per_row` colunas.
+let AuthorRows = |authors, per_row| {
+    let n_rows = to_int(ceil(len(authors) / to_float(per_row)))
+
+    let rows = map(
+                    range(0, n_rows),
+                    |k| {
+                        return XStack(
+                            spaced(
+                                map(
+                                    take(drop(authors, k * per_row), per_row),
+                                    |a| {
+                                        # XXX: hacky but it works
+                                        # (nudge author positions)
+                                        if (a[0] == "Lorem ipsum dolor sit amet co") {
+                                            return [
+                                                Gap([1.1, 0]),
+                                                Author(a[0], a[1])
+                                            ]
+                                        } else {
+                                            return Author(a[0], a[1])
+                                        }
+                                    }
+                                ),
+                                Gap([0.5, 0.01])
+                            )
+                        )
+                    }
+                )
+
+    return VStack(spaced(rows, Gap([0.01, 0.15])))
+}
+
+# Colunas da tabela comparativa (posições relativas à largura do quadro).
+let TABLE_LEFT = 0.7 - FRAME_W / 2
+let TABLE_RIGHT = FRAME_W / 2 - 0.7
+let TABLE_TOP = AREA_TOP - 0.2
+let TABLE_ROW_H = 0.42
+let TABLE_COLS = [
+    TABLE_LEFT + 0.4,
+    TABLE_RIGHT - 2.6,
+    TABLE_RIGHT - 1.3,
+    TABLE_RIGHT
+]
+
+# Verde quando o valor é o melhor (menor) da coluna.
+let metric_color = |v, vals| {
+    if (v == min_of(vals)) { return IMPROVE_COLOR }
+    return BLACK
+}
+
+# Tabela: algoritmo | explorados | saltos | peso. Tudo calculado a partir de
+# `algos`, uma lista de [nome, cor, ordem_de_expansão, caminho].
+let ComparisonTable = |graph, algos| {
+    let counts = map(algos, |a| len(a[2]))
+    let hops = map(algos, |a| len(a[3]) - 1)
+    let costs = map(algos, |a| graph_path_cost(graph, a[3]))
+    return block {
+        . TextAt("Algoritmo", FS_TABLE_HEAD, DARK_GRAY, TABLE_COLS[0], TABLE_TOP, "l", 2)
+        . TextAt("Explorados", FS_TABLE_HEAD, DARK_GRAY, TABLE_COLS[1], TABLE_TOP, "r", 1.4)
+        . TextAt("Passos", FS_TABLE_HEAD, DARK_GRAY, TABLE_COLS[2], TABLE_TOP, "r", 1.0)
+        . TextAt("Distância", FS_TABLE_HEAD, DARK_GRAY, TABLE_COLS[3], TABLE_TOP, "r", 1.0)
+        . stroke{LIGHT_GRAY, 1} Line([TABLE_LEFT, TABLE_TOP - 0.2, 0], [TABLE_RIGHT, TABLE_TOP - 0.2, 0])
+        for ([i, a] in enumerate(algos)) {
+            let y = TABLE_TOP - 0.5 - i * TABLE_ROW_H
+            . shift{[TABLE_LEFT + 0.12, y, 0]} fill{a[1]} stroke{darken(a[1])} Square(0.2)
+            . TextAt(a[0], FS_TABLE, BLACK, TABLE_COLS[0], y, "l", 2.4)
+            . TextAt(to_string(counts[i]), FS_TABLE, metric_color(counts[i], counts), TABLE_COLS[1], y, "r", 1.4)
+            . TextAt(to_string(hops[i]), FS_TABLE, metric_color(hops[i], hops), TABLE_COLS[2], y, "r", 1.0)
+            . TextAt(num1(costs[i]), FS_TABLE, metric_color(costs[i], costs), TABLE_COLS[3], y, "r", 1.0)
+        }
+    }
+}
