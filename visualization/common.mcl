@@ -633,7 +633,7 @@ let RunSearch = |graph, &region, &labels, &trail, &rings, &edges, &pick, &panel,
         }
 
         play [
-            Trans(0.25 * anim_scale(graph), [&rings]),
+            TagTrans(0.25 * anim_scale(graph), [&rings]),
             Fade(0.25 * anim_scale(graph), [&edges, &pick, &panel])
         ]
         play Wait(step_delay(graph))
@@ -660,6 +660,7 @@ let HighlightNode = |graph, id, fill_col, stroke_col, stroke_w, r_mult|
 
 let AnimateEdgesWithNodes = |graph, &edges_mesh, &highlight_mesh, edges_list, color, width, delay| anim {
     let node_dist = |a, b| norm(node_local(graph, a) - node_local(graph, b))
+    let k = graph["k"]
 
     var wave_edges = []
     var wave_highlights = []
@@ -670,7 +671,7 @@ let AnimateEdgesWithNodes = |graph, &edges_mesh, &highlight_mesh, edges_list, co
     for (i in range(0, len(edges_list))) {
         let e = edges_list[i]
 
-        if (current_source != -1 and e[0] != current_source) {
+        if (current_source != -1 and (e[0] != current_source or len(group_edges) >= k)) {
             # Try to put this K-edge group into the current parallel wave.
             # If it is too close to an edge already in that wave, flush first.
             var can_add = 1
