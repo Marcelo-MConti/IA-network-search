@@ -1,23 +1,19 @@
 :- ensure_loaded("../graph.pl").
-dfs(Vi,Vf,Vertices,Arestas,Caminho):-
+dfs(Vi,Vf,Vertices,Arestas,Caminho,Distancia):-
     member(v(Vi,_,_),Vertices),
     member(v(Vf,_,_),Vertices),
-    dfs_busca(Vf,Arestas,[Vi-[Vi]],Caminho,[Vi]).
+    dfs_busca(Vf,Vertices,Arestas,[0-(Vi-[Vi])],Caminho,[Vi],Distancia).
 
 % Caso em que chegamos ao vertice final
-dfs_busca(Vf,_,[Vf-CaminhoAtual|_],Caminho,_) :-
+dfs_busca(Vf,_,_,[Dist-(Vf-CaminhoAtual)|_],Caminho,_,Dist) :-
     reverse(CaminhoAtual,Caminho), !.
 
-% Caso em que não encontramos nenhum caminho possivel
-dfs_busca(_,_,[],_Caminho,_):-
-    fail.
-
-dfs_busca(Vf,Arestas,[Atual-CaminhoAtual | DemaisCaminhos],Caminho,Fechados):-
+dfs_busca(Vf,Vertices,Arestas,[Dist-(Atual-CaminhoAtual) | DemaisCaminhos],Caminho,Fechados,Distancia):-
     filhos(Atual,Arestas,CaminhoAtual,L),
     % ignora nós já visitados (conjunto fechado) para manter busca limitada
     exclude(member_right(Fechados), L, Lfiltrado),
-    adicionar_caminhos_dfs(Lfiltrado,CaminhoAtual,DemaisCaminhos,CaminhosAtualizados),
-    dfs_busca(Vf,Arestas,CaminhosAtualizados,Caminho,[Atual|Fechados]).
+    adicionar_caminhos_dfs(Lfiltrado,Atual,Dist,CaminhoAtual,DemaisCaminhos,CaminhosAtualizados,Vertices),
+    dfs_busca(Vf,Vertices,Arestas,CaminhosAtualizados,Caminho,[Atual|Fechados],Distancia).
 
 % Responsável por encontrar os filhos da aresta Atual
 filhos(Atual,Arestas,CaminhoAtual,L):-
@@ -37,10 +33,16 @@ filhos(Atual,Arestas,CaminhoAtual,L):-
 member_right(Lista, X) :- member(X, Lista).
 
 % Responsável por adicionar os novos caminhos dos filhos
-adicionar_caminhos_dfs(L,CaminhoAtual,DemaisCaminhos,CaminhosAtualizados):-
+adicionar_caminhos_dfs(L,Atual,Dist,CaminhoAtual,DemaisCaminhos,CaminhosAtualizados,Vertices):-
     findall(
-        X-[X|CaminhoAtual],
-        member(X,L),
+        NovaDist-(X-[X|CaminhoAtual]),
+        (
+            member(X,L),
+            member(v(X,X1,Y1),Vertices),
+            member(v(Atual,AtualX,AtualY),Vertices),
+            distancia(v(Atual,AtualX,AtualY),v(X,X1,Y1),Add),
+            NovaDist is Dist + Add
+        ),
         CaminhosNovos
     ),
     append(CaminhosNovos,DemaisCaminhos,CaminhosAtualizados).
