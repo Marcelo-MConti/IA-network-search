@@ -27,6 +27,13 @@
 %   Vf   : goal vertex id (must be < N)
 %   Out  : path of the generated .mcs data file
 %
+% Heuristics:
+%   The A* and Best-First searches score candidates with a heuristic h(x) from
+%   the candidate vertex to the goal. By default h'(x) = h(x) (euclidean
+%   distance). Use set_heur_mode/1 before run/7 to compose the heuristic:
+%     set_heur_mode(composed).    % h'(x) = h(x)          (default)
+%     set_heur_mode(expr(E)).     % h'(x) = E              (arbitrary expression)
+%
 % HOW TO INTEGRATE WITH MONOCURL
 %   Monocurl has no way to run Prolog, so this driver writes a generated .mcl
 %   file. The map is named after the file: gen/graph20.mcl defines `graph20`,
@@ -172,43 +179,99 @@ pack_open_dij(Fila, OpenPairs, Head) :-
     ( Fila = [_Gf-(Head-_) | _] -> true ; Head = -1 ).
 
 % ---------------------------------------------------------------------------
-% ---------- instrumented A* -------------------------------------------------
-% f = g + h ; h is the euclidean distance to the goal.
-% Also records, for each expanded node, the unvisited candidate neighbors that
-% were scored with the heuristic, and the node A* expands next (min f = g + h).
+% ---------- heuristic composition -----------------------------------------
+% A* and Best-First drive their decisions with a heuristic h(x) measured from
+% the candidate vertex to the goal. To run them with a composed heuristic h'(x)
+% instead of the plain h(x), select a transformation with set_heur_mode/1:
+%   composed     -> h'(x) = h(x)           (default; plain euclidean distance)
+%   expr(E)      -> h'(x) = E                (arbitrary arithmetic expression
+%                                           over the base heuristic h(x), e.g.
+%                                           2 * h, h ^ 2, sqrt(h) + h)
+% The composed value replaces h in f = g + h (A*) and in the open-list key
+% (Best-First), so the recorded expansions and pending sets reflect the
+% composed heuristic.
 % ---------------------------------------------------------------------------
-astar_exp(Vf, _, _Arestas, [(_F-Cur-(Vf-Path)) | _], ExplAcc, StepsAcc, PendAcc, Path, Cur) :-
-    reverse([Vf | ExplAcc], Order),
-    reverse([[Vf, [], []] | StepsAcc], Steps),
-    reverse([[] | PendAcc], Pending),
-    retractall(astar_steps(_)), assert(astar_steps(Steps)),
-    retractall(astar_pending(_)), assert(astar_pending(Pending)),
-    assert_results(astar, Order, Path, Cur, reach), !.
+:- dynamic heur_mode/1.
+heur_mode(composed).
 
-astar_exp(Vf, Vertices, Arestas, [(_F-Cur-(Atual-Path)) | Resto], ExplAcc, StepsAcc, PendAcc, PathFinal, DistOut) :-
-    findall(Fn-Dn-(Id-[Id | Path]),
-        (   ( member(e(Atual, Id, P), Arestas) ; member(e(Id, Atual, P), Arestas) ),
-            \+ member(Id, Path),
-            Dn is Cur + P,
-            member(v(Id, X1, Y1), Vertices),
-            member(v(Vf, X2, Y2), Vertices),
-            distancia(v(Id, X1, Y1), v(Vf, X2, Y2), H),
-            Fn is Cur + P + H
-        ),
-        Novos),
-    findall(Id, member(_Fn-_Dn-(Id-_), Novos), CandIds),
-    append(Novos, Resto, NovaFila),
-    keysort(NovaFila, FilaOrdenada),
-    % Snapshot of the full pending (priority) queue: [Id, f] pairs in order.
-    pack_pending(FilaOrdenada, PendingRow),
-    (   FilaOrdenada = [_FB-_DB-(NextId-_) | _]
+set_heur_mode(M) :- retractall(heur_mode(_)), assertz(heur_mode(M)).
+
+apply_heur(composed, H, H) :- !.
+
+apply_heur(expr(E), H0, H) :-
+    subst_expr(E, H0, EVal),
+    H is EVal.
+
+% subst_expr/3 : inside an arithmetic expression over the base heuristic (e.g.
+% `2 * H0`, `H0 ^ 2`) the base appears as a plain variable; replace it with its
+% bound value so the composed heuristic can be evaluated with is/2.
+subst_expr(T, _V, T) :- number(T), !.
+subst_expr(T, V, S) :- var(T), !, S = V.
+subst_expr(T, V, S) :-
+    T =.. Rest,
+    [F | Args] = Rest,
+    subst_args(Args, V, NewArgs),
+    S =.. [F | NewArgs].
+
+subst_args([], _, []).
+subst_args([A | As], V, [SA | SS]) :-
+    subst_expr(A, V, SA),
+    subst_args(As, V, SS).
+
+% heur_val/4 : effective heuristic from candidate vertex IdFrom to the goal
+% Vf, composed with the currently selected heuristic transformation.
+heur_val(Vf, Vertices, IdFrom, H) :-
+    member(v(IdFrom, X1, Y1), Vertices),
+    member(v(Vf, X2, Y2), Vertices),
+    distancia(v(IdFrom, X1, Y1), v(Vf, X2, Y2), H0),
+    heur_mode(M),
+    apply_heur(M, H0, H).
+
+% ---------------------------------------------------------------------------
+% ---------- instrumented A* -------------------------------------------------
+% f = g + h ; h is the (composed) heuristic to the goal.
+% Also records, for each expanded node, the unvisited candidate neighbours that
+% were scored with the heuristic, and the node A* expands next (min f = g + h).
+% The expansion loop is iterative through the tail-recursive worker astar_run/9
+% so that a deep frontier cannot grow the stack without bound.
+% ---------------------------------------------------------------------------
+astar_exp(Vf, Vertices, Arestas, Frontier, ExplAcc, StepsAcc, PendAcc, PathFinal, DistOut) :-
+    astar_run(Vf, Vertices, Arestas, Frontier, ExplAcc, StepsAcc, PendAcc, PathFinal, DistOut).
+
+astar_run(Vf, Vertices, Arestas, Frontier, ExplAcc, StepsAcc, PendAcc, PathFinal, DistOut) :-
+    (   Frontier = [(_F-Cur-(Vf-Path)) | _]
+    ->  reverse([Vf | ExplAcc], Order),
+       reverse([[Vf, [], []] | StepsAcc], Steps),
+       reverse([[] | PendAcc], Pending),
+       retractall(astar_steps(_)), assert(astar_steps(Steps)),
+       retractall(astar_pending(_)), assert(astar_pending(Pending)),
+       assert_results(astar, Order, Path, Cur, reach), !
+    ;   Frontier = [_F-Cur-(Atual-Path) | Resto]
+    ->  findall(Fn-Dn-(Id-[Id | Path]),
+            (   ( member(e(Atual, Id, P), Arestas) ; member(e(Id, Atual, P), Arestas) ),
+                \+ member(Id, Path),
+                \+ member(Id, ExplAcc),
+                Dn is Cur + P,
+                member(v(Id, X1, Y1), Vertices),
+                member(v(Vf, X2, Y2), Vertices),
+                heur_val(Vf, Vertices, Id, H),
+                Fn is Cur + P + H
+            ),
+            Novos),
+       findall(Id, member(_Fn-_Dn-(Id-_), Novos), CandIds),
+       append(Novos, Resto, NovaFila),
+       keysort(NovaFila, FilaOrdenada),
+       pack_pending(FilaOrdenada, PendingRow),
+       (   FilaOrdenada = [_FB-_DB-(NextId-_) | _]
+       ->  true
+       ;   NextId = -1
+       ),
+       astar_run(Vf, Vertices, Arestas, FilaOrdenada,
+                 [Atual | ExplAcc], [[Atual, CandIds, NextId] | StepsAcc],
+                 [PendingRow | PendAcc], PathFinal, DistOut)
+    ;   true
     ->  true
-    ;   NextId = -1
-    ),
-    astar_exp(Vf, Vertices, Arestas, FilaOrdenada,
-              [Atual | ExplAcc], [[Atual, CandIds, NextId] | StepsAcc],
-              [PendingRow | PendAcc],
-              PathFinal, DistOut).
+    ).
 
 % pack_pending/2 : turn a FilaOrdenada of (F-D-(Id-Path)) into [[Id, F], ...].
 pack_pending([], []).
@@ -294,7 +357,7 @@ best_exp(Vf, Vertices, Arestas, [_H-(Atual-CaminhoAtual) | DemaisCaminhos],
         (   member(X, L),
             member(v(X, X1, Y1), Vertices),
             member(v(Vf, X2, Y2), Vertices),
-            distancia(v(X, X1, Y1), v(Vf, X2, Y2), D)
+            heur_val(Vf, Vertices, X, D)
         ),
         CaminhosNovos),
     append(DemaisCaminhos, CaminhosNovos, S),

@@ -177,6 +177,15 @@ let path_w = |graph| {
     return PATH_W
 }
 
+let relax_w = |graph| {
+    if (graph["n"] > 50) { return 1.2 }
+    return RELAX_W
+}
+
+let hill_w = |graph| {
+    if (graph["n"] > 50) { return 2.0 }
+    return HILL_W
+}
 
 # =============================================================================
 # INSTÂNCIAS DAS FÁBRICAS GENÉRICAS DE lib.mcl
@@ -508,7 +517,7 @@ let DijkstraOverlay = |graph, cur, cur_g, open, relaxes, col|
         block {
             . NodeTag(graph, cur, "g=" + num1(cur_g), darken(col), TAG_UR)
             for ([nb, w, cand, improved] in relaxes) {
-                . DashedEdge(graph, cur, nb, relax_color(improved), RELAX_W, [0.5, 0.5])
+                . DashedEdge(graph, cur, nb, relax_color(improved), relax_w(graph), [0.5, 0.5])
                 if (improved == 1) {
                     . NodeTag(graph, nb, "g=" + num1(cand), darken(relax_color(1)), TAG_UL)
                 }
@@ -530,7 +539,7 @@ let AstarOverlay = |graph, pending, col| {
             for ([i, e] in enumerate(entries)) {
                 . NodeTag(graph, e[0], "f=" + num1(e[1]), darken(col), TAG_UR)
                 if (i == 0 and not (e[0] == graph["goal_id"])) {
-                    . DashedEdge(graph, e[0], graph["goal_id"], col, RELAX_W, [0.5, 0.5])
+                    . DashedEdge(graph, e[0], graph["goal_id"], col, relax_w(graph), [0.5, 0.5])
                 }
             }
         }
@@ -548,7 +557,7 @@ let BestOverlay = |graph, open, cands, col|
             }
             if (len(open) > 0) {
                 if (not (open[0][0] == graph["goal_id"])) {
-                    . DashedEdge(graph, open[0][0], graph["goal_id"], col, RELAX_W, [0.5, 0.5])
+                    . DashedEdge(graph, open[0][0], graph["goal_id"], col, relax_w(graph), [0.5, 0.5])
                 }
             }
         }
@@ -560,7 +569,7 @@ let HillOverlay = |graph, from, cands, col|
         Rings(graph, map(cands, |c| c[0]), col),
         block {
             for ([id, w] in cands) {
-                . DashedEdge(graph, from, id, col, HILL_W, [0.5, 0.5])
+                . DashedEdge(graph, from, id, col, hill_w(graph), [0.5, 0.5])
             }
         }
     ]
@@ -881,6 +890,19 @@ let metric_color = |v, vals| {
     return BLACK
 }
 
+# Cor do texto da linha: vermelho quando o algoritmo está "stuck".
+let stuck_text_color = |graph, i| {
+    if (i == 3 and graph["hill"]["status"] == "stuck") { return RED }
+    return BLACK
+}
+
+# Verde quando o valor é o melhor (menor) da coluna; vermelho quando a linha está stuck.
+let stuck_metric_color = |v, vals, graph, i| {
+    if (i == 3 and graph["hill"]["status"] == "stuck") { return RED }
+    if (v == min_of(vals)) { return IMPROVE_COLOR }
+    return BLACK
+}
+
 # Tabela: algoritmo | explorados | saltos | peso. Tudo calculado a partir de
 # `algos`, uma lista de [nome, cor, ordem_de_expansão, caminho].
 let ComparisonTable = |graph, algos| {
@@ -895,11 +917,12 @@ let ComparisonTable = |graph, algos| {
         . stroke{LIGHT_GRAY, 1} Line([TABLE_LEFT, TABLE_TOP - 0.2, 0], [TABLE_RIGHT, TABLE_TOP - 0.2, 0])
         for ([i, a] in enumerate(algos)) {
             let y = TABLE_TOP - 0.5 - i * TABLE_ROW_H
+            let stuck_col = stuck_text_color(graph, i)
             . shift{[TABLE_LEFT + 0.12, y, 0]} fill{a[1]} stroke{darken(a[1])} Square(0.2)
-            . TextAt(a[0], FS_TABLE, BLACK, TABLE_COLS[0], y, "l", 2.4)
-            . TextAt(to_string(counts[i]), FS_TABLE, metric_color(counts[i], counts), TABLE_COLS[1], y, "r", 1.4)
-            . TextAt(to_string(hops[i]), FS_TABLE, metric_color(hops[i], hops), TABLE_COLS[2], y, "r", 1.0)
-            . TextAt(num1(costs[i]), FS_TABLE, metric_color(costs[i], costs), TABLE_COLS[3], y, "r", 1.0)
+            . TextAt(a[0], FS_TABLE, stuck_col, TABLE_COLS[0], y, "l", 2.4)
+            . TextAt(to_string(counts[i]), FS_TABLE, stuck_metric_color(counts[i], counts, graph, i), TABLE_COLS[1], y, "r", 1.4)
+            . TextAt(to_string(hops[i]), FS_TABLE, stuck_metric_color(hops[i], hops, graph, i), TABLE_COLS[2], y, "r", 1.0)
+            . TextAt(num1(costs[i]), FS_TABLE, stuck_metric_color(costs[i], costs, graph, i), TABLE_COLS[3], y, "r", 1.0)
         }
     }
 }

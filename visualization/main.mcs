@@ -9,6 +9,14 @@
 #
 #     swipl -q -f scripts/generate_monocurl_graph_data.pl \
 #         -g "run(n, K, p, seed, start, goal, 'gen/graph20.mcl')" -t halt
+#
+# Para rodar o gerador com uma heurística composta (A* / Best-First):
+#
+#     swipl -q -f scripts/generate_monocurl_graph_data.pl \
+#         -g "set_heur_mode(expr(2 * H0)), run(n, K, p, seed, start, goal, 'gen/graph20.mcl')" -t halt
+#
+#     swipl -q -f scripts/generate_monocurl_graph_data.pl \
+#         -g "set_heur_mode(expr(H0 ^ 2)), run(n, K, p, seed, start, goal, 'gen/graph20.mcl')" -t halt
 
 
 import std.util
@@ -31,7 +39,10 @@ import gen.graph20
 import gen.graph30
 import gen.graph150
 import gen.graph200
+
 import gen.graph500
+import gen.graph500_10h
+import gen.graph500_h2
 
 import lib
 import common
@@ -40,7 +51,7 @@ import common
 background = WHITE
 
 
-let graph = graph20
+let graph = graph500_10h
 
 let dijkstra = graph["dijkstra"]
 let astar = graph["astar"]
@@ -209,6 +220,7 @@ slide "A. O grafo"
     title = Title("Uma rede Pequeno Mundo")
     subtitle = Subtitle(title, ["N=" + to_string(len(graph["nodes"])) + ", K=" + to_string(graph["k"]) + ", p=" + to_string(graph["p"])], DARK_GRAY, FS_SUBTITLE)
     play Write(0.5 * anim_scale(graph), [&title, &subtitle])
+    play Wait(2.0 * anim_scale(graph))
 
     # --- Fase 1: Vértices aleatórios ---
     caption = Footer("Fase 1: " + to_string(len(graph["nodes"])) + " vértices posicionados aleatoriamente no plano")
@@ -339,6 +351,7 @@ slide "B. Dijkstra"
     title = Title("Dijkstra:  custo uniforme, expande por distância")
     subtitle = Subtitle(title, ["expande todos os subcaminhos, minimizando g = distância total até o nó"], darken(DIJK_COLOR), FS_SUBTITLE)
     play Write(0.5 * anim_scale(graph), [&title, &subtitle])
+    play Wait(2.0 * anim_scale(graph))
 
     caption = Caption("Passo 0   •   início no nó " + to_string(graph["start_id"]))
     play Fade(0.3 * anim_scale(graph), [&caption])
@@ -351,6 +364,7 @@ slide "B. Dijkstra"
     if (graph["n"] <= 50) { caption = Caption("Caminho: " + path_str(dijkstra["path"])) } else { caption = [] }
     panel = SummaryPanel(graph, dijkstra["expand"], dijkstra["path"], "expande o nó com o menor valor de g", DIJK_COLOR)
     play [Set([&caption]), Fade(0.5 * anim_scale(graph), [&panel])]
+    play Wait(2.0 * anim_scale(graph))
 
 slide "C. A-star"
     title = []
@@ -372,6 +386,7 @@ slide "C. A-star"
                          "para ordenar os nós, com", MathText("h", FS_SUBTITLE), "= distância em linha reta até o destino"],
                         darken(ASTAR_COLOR), FS_SUBTITLE)
     play Write(0.5 * anim_scale(graph), [&title, &subtitle])
+    play Wait(2.0 * anim_scale(graph))
 
     caption = Caption("Passo 0   •   início no nó " + to_string(graph["start_id"]))
     play Fade(0.3 * anim_scale(graph), [&caption])
@@ -384,6 +399,7 @@ slide "C. A-star"
     if (graph["n"] <= 50) { caption = Caption("Caminho: " + path_str(astar["path"])) } else { caption = [] }
     panel = SummaryPanel(graph, astar["expand"], astar["path"], "expande o menor f = g + h", ASTAR_COLOR)
     play [Set([&caption]), Fade(0.5 * anim_scale(graph), [&panel])]
+    play Wait(2.0 * anim_scale(graph))
 
 slide "D. Best-First"
     title = []
@@ -405,6 +421,7 @@ slide "D. Best-First"
                          "= distância em linha reta até o objetivo, ignorando o custo percorrido"],
                         darken(BEST_COLOR), FS_SUBTITLE)
     play Write(0.5 * anim_scale(graph), [&title, &subtitle])
+    play Wait(2.0 * anim_scale(graph))
 
     caption = Caption("Passo 0   •   início no nó " + to_string(graph["start_id"]))
     play Fade(0.3 * anim_scale(graph), [&caption])
@@ -417,6 +434,7 @@ slide "D. Best-First"
     if (graph["n"] <= 50) { caption = Caption("Caminho: " + path_str(best["path"])) } else { caption = [] }
     panel = SummaryPanel(graph, best["expand"], best["path"], "expande o menor h, ignora o custo", BEST_COLOR)
     play [Set([&caption]), Fade(0.5 * anim_scale(graph), [&panel])]
+    play Wait(2.0 * anim_scale(graph))
 
 slide "E. Hill Climbing"
     title = []
@@ -435,6 +453,7 @@ slide "E. Hill Climbing"
     title = Title("Hill Climbing: guloso, sem backtracking")
     subtitle = Subtitle(title, ["vai para o vizinho não visitado mais próximo do nó atual "], darken(HILL_COLOR), FS_SUBTITLE)
     play Write(0.5 * anim_scale(graph), [&title, &subtitle])
+    play Wait(2.0 * anim_scale(graph))
 
     caption = Caption("Passo 0   •   início no nó " + to_string(graph["start_id"]))
     play Fade(0.3 * anim_scale(graph), [&caption])
@@ -452,6 +471,7 @@ slide "E. Hill Climbing"
     if (graph["n"] <= 50) { caption = Caption("Caminho: " + path_str(hill["path"])) } else { caption = [] }
     panel = SummaryPanel(graph, hill["expand"], hill["path"], hill_verdict, HILL_COLOR)
     play [Set([&caption]), Fade(0.5 * anim_scale(graph), [&panel])]
+    play Wait(2.0 * anim_scale(graph))
 
 slide "F. BFS"
     title = []
@@ -470,6 +490,7 @@ slide "F. BFS"
     title = Title("Busca em Largura:  explora camada por camada")
     subtitle = Subtitle(title, ["fila (FIFO) expande todos os nós na camada", MathText("n", FS_SUBTITLE), "antes de", MathText("n+1", FS_SUBTITLE), " •  cor mais clara = camada mais profunda"], darken(BFS_COLOR), FS_SUBTITLE)
     play Write(0.5 * anim_scale(graph), [&title, &subtitle])
+    play Wait(2.0 * anim_scale(graph))
 
     caption = Caption("Passo 0   •   início no nó " + to_string(graph["start_id"]))
     play Fade(0.3 * anim_scale(graph), [&caption])
@@ -482,6 +503,7 @@ slide "F. BFS"
     if (graph["n"] <= 50) { caption = Caption("Caminho: " + path_str(bfs["path"])) } else { caption = [] }
     panel = SummaryPanel(graph, bfs["expand"], bfs["path"], "caminho de menos saltos", BFS_COLOR)
     play [Set([&caption]), Fade(0.5 * anim_scale(graph), [&panel])]
+    play Wait(2.0 * anim_scale(graph))
 
 slide "G. DFS"
     title = []
@@ -500,6 +522,7 @@ slide "G. DFS"
     title = Title("Busca em Profundidade:  explora cada caminho até o fim")
     subtitle = Subtitle(title, ["pilha (LIFO), escolhe o vizinho mais profundo não visitado"], darken(DFS_COLOR), FS_SUBTITLE)
     play Write(0.5 * anim_scale(graph), [&title, &subtitle])
+    play Wait(2.0 * anim_scale(graph))
 
     caption = Caption("Passo 0   •   início no nó " + to_string(graph["start_id"]))
     play Fade(0.3 * anim_scale(graph), [&caption])
@@ -512,6 +535,7 @@ slide "G. DFS"
     if (graph["n"] <= 50) { caption = Caption("Caminho: " + short_path(dfs["path"])) } else { caption = [] }
     panel = SummaryPanel(graph, dfs["expand"], dfs["path"], "caminho longo, não o mais curto", DFS_COLOR)
     play [Set([&caption]), Fade(0.5 * anim_scale(graph), [&panel])]
+    play Wait(2.0 * anim_scale(graph))
 
 
 # -----------------------------------------------------------------------------
@@ -540,11 +564,14 @@ slide "H. Comparação"
     title = Title("Como cada algoritmo buscou na rede")
     subtitle = Subtitle(title, ["verde = melhor valor da coluna"], DARK_GRAY, FS_SUBTITLE)
     play Write(0.5 * anim_scale(graph), [&title, &subtitle])
+    play Wait(2.0 * anim_scale(graph))
 
     table = ComparisonTable(graph, ALGOS)
     play Fade(0.5 * anim_scale(graph), [&table])
+    play Wait(2.0 * anim_scale(graph))
 
     caption = Footer("O BFS chega no destino com o menor número de passos, enquanto o A* explora muito menos nós que o Dijkstra.")
     play Write(0.6 * anim_scale(graph), [&caption])
+    play Wait(2.0 * anim_scale(graph))
     
     print ["dijkstra" -> len(dijkstra["expand"]), "astar" -> len(astar["expand"]), "bfs" -> len(bfs["expand"]), "dfs" -> len(dfs["expand"]), "hill" -> len(hill["expand"])]
