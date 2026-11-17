@@ -26,21 +26,38 @@
 
 main :-
     current_prolog_flag(argv, Argv),
-    (   Argv = [S_s, N_s, K_s, P_s, Pairs_s | _]
+    (   Argv = [N_s, K_s, P_s, Pairs_s | Rest]
+    ->  atom_number(N_s, N),
+        atom_number(K_s, K),
+        atom_number(P_s, P),
+        set_graph_seed(31),
+        parse_pairs(Pairs_s, Pairs),
+        resolve_algos(Rest, Algos)
+    ;   Argv = [S_s, N_s, K_s, P_s, Pairs_s | Rest]
     ->  atom_number(S_s, S),
         atom_number(N_s, N),
         atom_number(K_s, K),
         atom_number(P_s, P),
         set_graph_seed(S),
-        read_term_from_codes(Pairs_s, Pairs, []),
-        is_list(Pairs),
-        (   Argv = [_, _, _, _, Algo_atom]
-        ->  run_benchmark(N, K, P, Pairs, [Algo_atom])
-        ;   run_benchmark(N, K, P, Pairs, [bfs, dfs, dijkstra, astar, best_first, hill_climb])
-        )
-    ;   format(stderr, "Usage: swipl -q -f benchmark.pl -- N K P Pairs [Algo]~n", []),
+        parse_pairs(Pairs_s, Pairs),
+        resolve_algos(Rest, Algos)
+    ;   format(user_error, "Usage: swipl -q -f benchmark.pl -- N K P Pairs [Algo]~n", []),
         halt(1)
-    ).
+    ),
+    run_benchmark(N, K, P, Pairs, Algos).
+
+parse_pairs(Pairs_s, Pairs) :-
+    (   is_list(Pairs_s)
+    ->  Pairs = Pairs_s
+    ;   read_term_from_atom(Pairs_s, Pairs, [])
+    ),
+    is_list(Pairs).
+
+resolve_algos([], [bfs, dfs, dijkstra, astar, best_first, hill_climb]).
+resolve_algos([Algo_atom], [Algo_atom]).
+resolve_algos(_, _) :-
+    format(user_error, "Usage: swipl -q -f benchmark.pl -- N K P Pairs [Algo]~n", []),
+    halt(1).
 
 run_benchmark(N, K, P, Pairs, Algos) :-
     % Deterministic small-world network (seed fixed inside graph.pl).
@@ -78,8 +95,8 @@ run_pair(Vertices, Arestas, Algo, Idx, Pair, run(Idx, S, G, Found, Dist, Path, H
         Hops = 0
     ).
 
-run_search(bfs,       S, G, V, E, Path, _)      :- bfs(S, G, V, E, Path).
-run_search(dfs,       S, G, V, E, Path, _)      :- dfs(S, G, V, E, Path).
+run_search(bfs,       S, G, V, E, Path, D)      :- bfs(S, G, V, E, Path, D).
+run_search(dfs,       S, G, V, E, Path, D)      :- dfs(S, G, V, E, Path, D).
 run_search(dijkstra,  S, G, V, E, Path, D)      :- dijkstra(S, G, V, E, Path, D).
 run_search(astar,     S, G, V, E, Path, D)      :- astar(S, G, V, E, Path, D).
 run_search(best_first,S, G, V, E, Path, D)      :- best_first(S, G, V, E, Path, D).
@@ -131,11 +148,7 @@ write_run(run(Idx, S, G, Found, Dist, Path, Hops, TimeMs, Status)) :-
     write_json_value(Dist),
     format(',"path":', []),
     write_json_value(Path),
-    format(',"hops":~w,"time_ms":~w,"status":"~w"}', [Hops, TimeMs, Status]),
-    (   Rest = [] -> true
-    ;   format(',', []),
-        write_runs(Rest)
-    ).
+    format(',"hops":~w,"time_ms":~w,"status":"~w"}', [Hops, TimeMs, Status]).
 
 write_json_value(null)      :- format('null', []).
 write_json_value(true)      :- format('true', []).
